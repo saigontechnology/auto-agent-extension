@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Demo Shop</title>
+    <meta name="vibe:project-id" content="demo-project" />
+    <meta name="vibe:build-id" content="build-001" />
+    <style>
+      body { margin: 0; font: 16px/1.5 system-ui, sans-serif; color: #222; }
+      header, main, footer { max-width: 720px; margin: 0 auto; padding: 16px 24px; }
+      header { display: flex; justify-content: space-between; align-items: center; }
+      .hero { padding: 32px; background: #eef3ff; border-radius: 12px; }
+      button { padding: 10px 18px; font: inherit; color: #fff; background: #2f6fed; border: 0; border-radius: 8px; }
+      li { margin: 6px 0; }
+      .spacer { height: 900px; }
+    </style>
+  </head>
+  <body>
+    <header data-vibe-source="src/components/Header.tsx:8">
+      <strong data-vibe-source="src/components/Header.tsx:9">Demo Shop</strong>
+      <nav><a id="about-link" href="about.html">About</a></nav>
+    </header>
+    <main>
+      <section class="hero" data-vibe-source="src/pages/Home.tsx:10">
+        <h1 id="title" data-vibe-source="src/pages/Home.tsx:12">Welcome back</h1>
+        <p id="tagline" data-vibe-source="src/pages/Home.tsx:13">Fresh fruit delivered to your door.</p>
+        <div><button id="buy" type="button">Buy</button></div>
+      </section>
+      <h2 data-vibe-source="src/pages/Home.tsx:28">Popular</h2>
+      <ul id="fruit">
+        <li data-vibe-source="src/pages/Home.tsx:30">Apples</li>
+        <li data-vibe-source="src/pages/Home.tsx:30">Pears</li>
+        <li data-vibe-source="src/pages/Home.tsx:30">Plums</li>
+      </ul>
+      <div class="spacer"></div>
+      <p id="far" data-vibe-source="src/pages/Home.tsx:40">You scrolled all the way down.</p>
+    </main>
+    <footer><p id="legal">No source attribute on this one.</p></footer>
+    <script>
+      document.getElementById('buy').addEventListener('click', () => {
+        document.title = 'clicked';
+      });
+    </script>
+  </body>
+</html>
