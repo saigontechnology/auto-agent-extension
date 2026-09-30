@@ -1,7 +1,7 @@
 # Vibe Feedback — Design Spec
 
 Date: 2026-09-30
-Status: awaiting review
+Status: approved 2026-09-30; amended the same day while writing the implementation plan (hash-route paths, port-based panel protocol, text-only inline editing, settings validation)
 
 ## 1. Purpose
 
@@ -44,6 +44,7 @@ The tool injects these at build time:
 
 - A page is a **preview page** when both meta tags are present with non-empty content. On any other page the side panel shows "not a preview build" and the picker is disabled.
 - `data-vibe-source` is `<repo-relative path>:<line>`. It is not required on every element.
+- A page's **path** is `location.pathname`. For hash-routed apps (hash starting with `#/`) the hash is appended, so `/#/settings` and `/#/home` are different pages.
 
 ### 3.2 Feedback API
 
@@ -112,6 +113,10 @@ lib/
   anchor-resolver.ts     Anchor -> element
   draft-store.ts         drafts in storage.local
   settings-store.ts      settings in storage.local
+  feedback-factory.ts    builds a FeedbackItem from a comment, context and anchor
+  pins.ts                pin numbering and draft grouping shared by page and panel
+  picker.ts, text-edit.ts, popover-position.ts   pure logic behind the on-page UI
+  background-handlers.ts handles side panel requests (testable without Chrome)
   auth/pkce.ts           verifier and challenge generation
   auth/oauth.ts          sign-in, token storage, refresh
   api/feedback-api.ts    interface FeedbackApi
@@ -119,6 +124,7 @@ lib/
   api/mock-feedback-api.ts   storage-backed stand-in
 components/              Picker, PinLayer, CommentPopover, TextEditor (content script UI)
 fixtures/demo/           sample preview page for tests and manual checks
+e2e/                     Playwright tests that load the built extension
 ```
 
 ### 4.1 Units
@@ -148,27 +154,30 @@ interface FeedbackApi {
 
 `HttpFeedbackApi` takes `apiBase`, a `getAccessToken` function and `fetch`. `MockFeedbackApi` persists to `storage.local` and stamps items with a fixed mock author. The background picks one from settings.
 
-**`settings-store`** — `{ useMock: boolean, apiBase: string, oauth: { authorizeUrl, tokenUrl, clientId, scopes } }`. `useMock` defaults to `true`, so the extension works end to end before the real API exists.
+**`settings-store`** — `{ useMock: boolean, apiBase: string, oauth: { authorizeUrl, tokenUrl, clientId, scopes } }`. `useMock` defaults to `true`, so the extension works end to end before the real API exists. With mock off, the API and OAuth URLs must be `https` (or `http://localhost`) and the client id is required; Options refuses to save otherwise.
 
 **`auth/oauth`** — `signIn()`, `signOut()`, `getAccessToken()`. Tokens are stored in `storage.local`. `getAccessToken()` refreshes when the token is within 60 seconds of expiry.
 
 ### 4.2 Data flow
 
 - **Drafts** are shared state in `storage.local`. The content script writes them; the side panel and the pin layer subscribe through `watch`. No messages are used to sync drafts.
-- **Side panel → content script** (`tabs.sendMessage`): `set-mode` (`off | select | text`), `focus-item` (scroll to a pin and flash it), `get-context`.
-- **Content script → side panel** (`runtime.sendMessage`): `context-changed`, sent on load and on SPA route change (`wxt:locationchange`).
-- **Side panel → background** (`runtime.sendMessage`): `submit`, `list`, `sign-in`, `sign-out`, `auth-state`.
+- **Side panel ↔ content script** use one long-lived port (`tabs.connect`, name `vibe-panel`) opened by the side panel to the tab it is reviewing. The page UI is active only while a panel is connected: closing the panel hides the pins and turns picking off.
+  - Panel → content: `set-mode` (`off | select | text`), `key` (`ArrowUp`/`ArrowDown` pressed while the panel has keyboard focus, so they still steer the picker), `focus-item` (scroll to a pin and flash it), `create-page-comment`, `set-sent` (the sent items for the open page, so the page can draw their pins).
+  - Content → panel: `context` (on connect and on SPA route change, `wxt:locationchange`), `mode` (when the reviewer leaves a mode with `Escape`), `unresolved` (ids whose element could not be found).
+  - A content script broadcasts `content-ready` (`runtime.sendMessage`) when it starts, so an already-open panel reconnects after a page reload.
+- **Side panel → background** (`runtime.sendMessage`): `submit`, `list`, `sign-in`, `sign-out`, `auth-state`. The background reads the drafts itself on `submit` and removes the ones it sent.
 - Only the background service worker makes network requests, so tokens never enter the page.
-- The side panel owns the current mode. When a content script reports `context-changed` after a full page load, the side panel re-applies the mode.
+- The side panel owns the current mode. When a content script reports `context` after a page load or route change, the side panel re-applies the mode.
+- The side panel reviews the active tab of its window and follows tab switches. A `?tabId=` query parameter pins it to one tab; end-to-end tests use this to run the panel as a normal page.
 
 ### 4.3 On-page behaviour
 
 All extension UI on the page is mounted in one Shadow DOM root so page CSS and extension CSS cannot affect each other.
 
 - **Select mode** — hovering outlines the element under the cursor. Clicking opens the comment popover anchored to it. `ArrowUp` moves the selection to the parent, `ArrowDown` to the first child, `Escape` leaves the mode. Pointer and click events are captured and stopped so the page does not react.
-- **Text mode** — clicking an element that has a non-empty direct text node makes it `contenteditable="plaintext-only"`. `Enter` or blur saves; `Escape` restores the original text. If the text changed, a `text-edit` draft is created with `before` and `after`, and the popover opens for an optional note. If it did not change, nothing is created.
+- **Text mode** — clicking an element that contains text and no child elements makes it `contenteditable="plaintext-only"`. (Mixed content such as `<p>Hello <b>world</b></p>` is not editable as a whole, because cancelling could not restore the child elements; the inner `<b>` is.) `Enter` or blur saves; `Escape` restores the original text. If the text changed, a `text-edit` draft is created with `before` and `after`, and the popover opens for an optional note. If it did not change, nothing is created. Editing the same element again amends its existing draft and keeps the original `before`; editing it back to the original removes the draft.
 - **Page-level comment** — created from a button in the side panel; has no anchor and no pin.
-- **Pins** — numbered markers at the top-right corner of each anchored element. Drafts and sent items use different colours; a sent pin shows its author on hover. Positions are recomputed on scroll, resize and DOM mutation, throttled with `requestAnimationFrame`.
+- **Pins** — numbered markers at the top-right corner of each anchored element: drafts first, then open sent items. Resolved sent items get no pin. Drafts and sent items use different colours; a sent pin shows its author on hover, and clicking a draft pin reopens its comment. Positions are recomputed on scroll, resize and DOM mutation, throttled with `requestAnimationFrame`.
 - After a reload, inline text edits are not re-applied to the page. The draft remains in the side panel and its pin is shown.
 
 ### 4.4 Side panel
