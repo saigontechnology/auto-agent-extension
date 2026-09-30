@@ -79,9 +79,9 @@ export function Picker({ host, remoteKey, onPick, onExit }: Props) {
     const onClick = (event: MouseEvent) => {
       if (isOwnUi(event, host)) return;
       block(event);
-      const clicked = eventElement(event, host);
+      // Pick what is highlighted, which the keyboard may have moved away from the cursor.
       const current = targetRef.current;
-      const chosen = current && clicked && current.contains(clicked) ? current : clicked;
+      const chosen = current?.isConnected ? current : eventElement(event, host);
       if (chosen) callbacks.current.onPick(chosen);
     };
 

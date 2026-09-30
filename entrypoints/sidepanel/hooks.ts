@@ -39,7 +39,17 @@ export function useTargetTab(): number | null {
   return tabId;
 }
 
+/**
+ * `unreachable` means no content script answered: the page is outside the extension's hosts,
+ * or it was opened before the extension was installed or updated and needs a reload.
+ */
+export type ConnectionStatus = 'connecting' | 'connected' | 'unreachable';
+
+/** How long a reloading page may take to reconnect before it is reported as unreachable. */
+const RECONNECT_GRACE_MS = 1500;
+
 export type PanelConnection = {
+  status: ConnectionStatus;
   context: PageContext | null;
   mode: Mode;
   unresolved: string[];
@@ -49,6 +59,7 @@ export type PanelConnection = {
 
 /** Keeps a port open to the tab's content script and reconnects when the page reloads. */
 export function usePanelConnection(tabId: number | null): PanelConnection {
+  const [status, setStatus] = useState<ConnectionStatus>('connecting');
   const [context, setContext] = useState<PageContext | null>(null);
   const [mode, setModeState] = useState<Mode>('off');
   const [unresolved, setUnresolved] = useState<string[]>([]);
@@ -83,10 +94,14 @@ export function usePanelConnection(tabId: number | null): PanelConnection {
     if (tabId === null) return;
     const port = browser.tabs.connect(tabId, { name: PANEL_PORT });
     portRef.current = port;
+    let answered = false;
+    let graceTimer: ReturnType<typeof setTimeout> | undefined;
 
     port.onMessage.addListener((raw) => {
       const message = raw as ContentToPanel;
       if (message.type === 'context') {
+        answered = true;
+        setStatus('connected');
         setContext(message.context);
         // The panel owns the mode: re-apply it after a reload or route change.
         if (message.context && modeRef.current !== 'off') {
@@ -109,6 +124,13 @@ export function usePanelConnection(tabId: number | null): PanelConnection {
       // Reading lastError marks "no content script on this page" as handled.
       void browser.runtime.lastError;
       reset();
+      if (answered) {
+        // The page is reloading or navigating; give its new content script time to announce itself.
+        setStatus('connecting');
+        graceTimer = setTimeout(() => setStatus('unreachable'), RECONNECT_GRACE_MS);
+      } else {
+        setStatus('unreachable');
+      }
     });
 
     const onReady = (message: unknown, sender: Browser.runtime.MessageSender) => {
@@ -118,12 +140,13 @@ export function usePanelConnection(tabId: number | null): PanelConnection {
 
     return () => {
       browser.runtime.onMessage.removeListener(onReady);
+      clearTimeout(graceTimer);
       port.disconnect();
       reset();
     };
   }, [tabId, attempt]);
 
-  return { context, mode, unresolved, send, setMode };
+  return { status, context, mode, unresolved, send, setMode };
 }
 
 export function useDrafts(projectId: string | undefined): FeedbackItem[] {

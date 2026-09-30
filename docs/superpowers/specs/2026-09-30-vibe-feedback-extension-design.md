@@ -164,7 +164,8 @@ interface FeedbackApi {
 - **Side panel ↔ content script** use one long-lived port (`tabs.connect`, name `vibe-panel`) opened by the side panel to the tab it is reviewing. The page UI is active only while a panel is connected: closing the panel hides the pins and turns picking off.
   - Panel → content: `set-mode` (`off | select | text`), `key` (`ArrowUp`/`ArrowDown` pressed while the panel has keyboard focus, so they still steer the picker), `focus-item` (scroll to a pin and flash it), `create-page-comment`, `set-sent` (the sent items for the open page, so the page can draw their pins).
   - Content → panel: `context` (on connect and on SPA route change, `wxt:locationchange`), `mode` (when the reviewer leaves a mode with `Escape`), `unresolved` (ids whose element could not be found).
-  - A content script broadcasts `content-ready` (`runtime.sendMessage`) when it starts, so an already-open panel reconnects after a page reload.
+  - A content script broadcasts `content-ready` (`runtime.sendMessage`) when it starts and when its page is restored from the back/forward cache, so an already-open panel reconnects.
+  - `wxt:locationchange` fires before the new URL is committed, so the content script re-reads `location` on the next task; the page title is read when an item is created.
 - **Side panel → background** (`runtime.sendMessage`): `submit`, `list`, `sign-in`, `sign-out`, `auth-state`. The background reads the drafts itself on `submit` and removes the ones it sent.
 - Only the background service worker makes network requests, so tokens never enter the page.
 - The side panel owns the current mode. When a content script reports `context` after a page load or route change, the side panel re-applies the mode.
@@ -174,7 +175,7 @@ interface FeedbackApi {
 
 All extension UI on the page is mounted in one Shadow DOM root so page CSS and extension CSS cannot affect each other.
 
-- **Select mode** — hovering outlines the element under the cursor. Clicking opens the comment popover anchored to it. `ArrowUp` moves the selection to the parent, `ArrowDown` to the first child, `Escape` leaves the mode. Pointer and click events are captured and stopped so the page does not react.
+- **Select mode** — hovering outlines the element under the cursor. Clicking opens the comment popover anchored to the highlighted element, which is the hovered one unless the keyboard moved the selection. `ArrowUp` moves the selection to the parent, `ArrowDown` to the first child, `Escape` leaves the mode. Pointer and click events are captured and stopped so the page does not react.
 - **Text mode** — clicking an element that contains text and no child elements makes it `contenteditable="plaintext-only"`. (Mixed content such as `<p>Hello <b>world</b></p>` is not editable as a whole, because cancelling could not restore the child elements; the inner `<b>` is.) `Enter` or blur saves; `Escape` restores the original text. If the text changed, a `text-edit` draft is created with `before` and `after`, and the popover opens for an optional note. If it did not change, nothing is created. Editing the same element again amends its existing draft and keeps the original `before`; editing it back to the original removes the draft.
 - **Page-level comment** — created from a button in the side panel; has no anchor and no pin.
 - **Pins** — numbered markers at the top-right corner of each anchored element: drafts first, then open sent items. Resolved sent items get no pin. Drafts and sent items use different colours; a sent pin shows its author on hover, and clicking a draft pin reopens its comment. Positions are recomputed on scroll, resize and DOM mutation, throttled with `requestAnimationFrame`.
@@ -200,10 +201,12 @@ All extension UI on the page is mounted in one Shadow DOM root so page CSS and e
 | Situation | Behaviour |
 |---|---|
 | Page is not a preview page | Side panel shows a notice; mode switch disabled |
+| No content script answers (page outside the extension's hosts, or opened before the extension was installed or updated) | Side panel says the extension is not running on the page and asks for a reload |
 | Signed out, real API | Drafting works; Send is disabled with a sign-in prompt |
 | Submit fails (network or 5xx) | Drafts are kept; an error with a Retry action is shown |
 | 401 from the API | Refresh the token once and retry; if it fails again, clear tokens and prompt to sign in |
 | `list` fails | Sent section shows an error with Retry; drafts are unaffected |
+| API response is not an array of well-formed `SentFeedback` | Treated as a failed request ("unexpected response"); nothing is rendered from it |
 | Anchor cannot be resolved | Item stays in the list, labelled "element not found"; no pin |
 | Settings incomplete with mock off | Side panel links to Options |
 

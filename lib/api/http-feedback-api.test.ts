@@ -111,4 +111,30 @@ describe('HttpFeedbackApi', () => {
     const { api } = setup([new Response('<html>gateway</html>', { status: 200 })]);
     await expect(api.list('p1', '/')).rejects.toThrow('unexpected response');
   });
+
+  it('rejects a response whose items lack fields the UI reads', async () => {
+    const { author: _author, ...noAuthor } = makeSent();
+    const { page: _page, ...noPage } = makeSent();
+    const bad: unknown[] = [
+      noAuthor,
+      noPage,
+      { ...makeSent(), status: 'done' },
+      { ...makeSent(), kind: 'note' },
+      { ...makeSent(), anchor: { selector: 5 } },
+      { ...makeSent(), textEdit: { before: 'a' } },
+      null,
+      'text',
+    ];
+    for (const item of bad) {
+      const { api } = setup([json([makeSent({ id: 'ok' }), item])]);
+      await expect(api.list('p1', '/')).rejects.toThrow('unexpected response');
+    }
+  });
+
+  it('accepts page comments and text edits', async () => {
+    const pageComment = makeSent({ id: 'p', kind: 'page', anchor: undefined });
+    const textEdit = makeSent({ id: 't', kind: 'text-edit', textEdit: { before: 'a', after: 'b' } });
+    const { api } = setup([json([pageComment, textEdit])]);
+    expect((await api.list('p1', '/')).map((item) => item.id)).toEqual(['p', 't']);
+  });
 });

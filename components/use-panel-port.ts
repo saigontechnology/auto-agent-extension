@@ -22,8 +22,19 @@ export function usePanelPort(onMessage: (message: PanelToContent) => void) {
     };
     browser.runtime.onConnect.addListener(onConnect);
     // Tell an already-open side panel that this page is ready to be connected to.
-    browser.runtime.sendMessage({ type: 'content-ready' }).catch(() => undefined);
-    return () => browser.runtime.onConnect.removeListener(onConnect);
+    const announce = () => {
+      browser.runtime.sendMessage({ type: 'content-ready' }).catch(() => undefined);
+    };
+    announce();
+    // A page restored from the back/forward cache keeps this script but has lost its port.
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) announce();
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => {
+      browser.runtime.onConnect.removeListener(onConnect);
+      window.removeEventListener('pageshow', onPageShow);
+    };
   }, []);
 
   const post = useCallback(

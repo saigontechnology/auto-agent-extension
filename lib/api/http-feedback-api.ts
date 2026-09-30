@@ -10,6 +10,40 @@ export type HttpFeedbackApiDeps = {
   onUnauthorized: () => Promise<void>;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+/**
+ * Checks the fields the extension reads from sent feedback, so a contract mismatch shows up
+ * as an error message instead of crashing the side panel.
+ */
+function isSentFeedback(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  const { page, author, anchor, textEdit } = value;
+  return (
+    isString(value.id) &&
+    (value.kind === 'element' || value.kind === 'text-edit' || value.kind === 'page') &&
+    isString(value.comment) &&
+    (value.status === 'open' || value.status === 'resolved') &&
+    isRecord(page) &&
+    isString(page.path) &&
+    isRecord(author) &&
+    isString(author.name) &&
+    (anchor === undefined ||
+      (isRecord(anchor) &&
+        isString(anchor.selector) &&
+        isString(anchor.tag) &&
+        isString(anchor.text))) &&
+    (textEdit === undefined ||
+      (isRecord(textEdit) && isString(textEdit.before) && isString(textEdit.after)))
+  );
+}
+
 /**
  * The real API adapter. When the tool's actual contract is known, this is the file to change:
  * the URLs, the request body, and how the response maps to SentFeedback.
@@ -43,7 +77,9 @@ export function createHttpFeedbackApi(deps: HttpFeedbackApiDeps): FeedbackApi {
     if (!response.ok) throw new ApiError(`Request failed (${response.status})`, response.status);
 
     const data: unknown = await response.json().catch(() => null);
-    if (!Array.isArray(data)) throw new ApiError('The server sent an unexpected response.');
+    if (!Array.isArray(data) || !data.every(isSentFeedback)) {
+      throw new ApiError('The server sent an unexpected response.');
+    }
     return data as SentFeedback[];
   }
 

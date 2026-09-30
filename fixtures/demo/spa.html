@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>SPA</title>
+    <meta name="vibe:project-id" content="demo-project" />
+    <meta name="vibe:build-id" content="build-001" />
+    <style>
+      body { max-width: 720px; margin: 0 auto; padding: 16px 24px; font: 16px/1.5 system-ui, sans-serif; }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <a id="to-home" href="#/home">Home</a>
+      <a id="to-settings" href="#/settings">Settings</a>
+      <button id="push" type="button">Push route</button>
+    </nav>
+    <h1 id="heading" data-vibe-source="src/App.tsx:7">Home</h1>
+    <script>
+      // A one-file stand-in for a client-side router: hash routes plus one history route.
+      const heading = document.getElementById('heading');
+      const render = () => {
+        const pushed = location.pathname.startsWith('/pushed');
+        heading.textContent = pushed ? 'Pushed' : location.hash === '#/settings' ? 'Settings' : 'Home';
+        document.title = heading.textContent;
+      };
+      addEventListener('hashchange', render);
+      document.getElementById('push').addEventListener('click', () => {
+        history.pushState({}, '', '/pushed/a');
+        render();
+      });
+      render();
+    </script>
+  </body>
+</html>

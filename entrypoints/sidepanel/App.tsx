@@ -5,7 +5,14 @@ import { removeDraft, updateDraft } from '@/lib/draft-store';
 import { groupDrafts, locationLabel, pagePins } from '@/lib/pins';
 import type { Mode } from '@/lib/types';
 import { DraftRow } from './DraftRow';
-import { useAuth, useDrafts, usePanelConnection, useSent, useTargetTab } from './hooks';
+import {
+  type ConnectionStatus,
+  useAuth,
+  useDrafts,
+  usePanelConnection,
+  useSent,
+  useTargetTab,
+} from './hooks';
 
 const MODES: Array<{ mode: Mode; label: string }> = [
   { mode: 'off', label: 'Off' },
@@ -13,9 +20,17 @@ const MODES: Array<{ mode: Mode; label: string }> = [
   { mode: 'text', label: 'Text' },
 ];
 
+const NOTICES: Record<ConnectionStatus, string> = {
+  connecting: 'Connecting to this page…',
+  connected:
+    'This page is not a preview build. Open a preview deployed by the tool to leave feedback.',
+  unreachable:
+    'Vibe Feedback is not running on this page. If this is a preview build, reload the page.',
+};
+
 export function App() {
   const tabId = useTargetTab();
-  const { context, mode, unresolved, send, setMode } = usePanelConnection(tabId);
+  const { status, context, mode, unresolved, send, setMode } = usePanelConnection(tabId);
   const drafts = useDrafts(context?.projectId);
   const auth = useAuth();
   const authKey = auth.state
@@ -80,9 +95,7 @@ export function App() {
     return (
       <div className="panel">
         {header}
-        <p className="notice">
-          This page is not a preview build. Open a preview deployed by the tool to leave feedback.
-        </p>
+        <p className="notice">{NOTICES[status]}</p>
       </div>
     );
   }

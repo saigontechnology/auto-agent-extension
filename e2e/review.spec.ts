@@ -1,5 +1,9 @@
 import { expect, test } from './fixtures';
-import { editText, openReview, pinComment, setMode } from './helpers';
+import type { browser } from 'wxt/browser';
+import { editText, openPanelOnBlankTab, openReview, pinComment, setMode } from './helpers';
+
+// `worker.evaluate` callbacks run inside the extension's service worker, where `chrome` exists.
+declare const chrome: typeof browser;
 
 test('hovering labels the element; panel keys steer and leave the picker', async ({
   context,
@@ -152,4 +156,91 @@ test('Escape while editing text restores the original and creates no draft', asy
   await page.keyboard.press('Escape');
   await expect(page.locator('#tagline')).toHaveText('Fresh fruit delivered to your door.');
   await expect(panel.getByRole('heading', { name: 'Drafts (0)' })).toBeVisible();
+});
+
+test('comments made after a route change are filed under the new route', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  const { page, panel } = await openReview(context, worker, extensionId, 'spa.html#/home');
+  await setMode(panel, 'Select');
+  await pinComment(page, '#heading', 'Home note');
+  await setMode(panel, 'Off');
+
+  await page.locator('#to-settings').click();
+  await expect(page.locator('#heading')).toHaveText('Settings');
+  await expect(page.locator('[data-vf-pin]')).toHaveCount(0);
+  await setMode(panel, 'Select');
+  await pinComment(page, '#heading', 'Settings note');
+  await setMode(panel, 'Off');
+
+  await page.locator('#push').click();
+  await expect(page.locator('#heading')).toHaveText('Pushed');
+  await setMode(panel, 'Select');
+  await pinComment(page, '#heading', 'Pushed note');
+
+  const drafts = panel.getByRole('region', { name: 'Drafts' });
+  for (const path of ['/spa.html#/home', '/spa.html#/settings', '/pushed/a']) {
+    await expect(drafts.getByRole('heading', { name: path, exact: true })).toBeVisible();
+  }
+  await expect(page.locator('[data-vf-pin="draft"]')).toHaveCount(1);
+
+  const stored = await worker.evaluate(async () => {
+    const { drafts } = await chrome.storage.local.get('drafts');
+    return (drafts as Record<string, Array<{ page: { title: string } }>>)['demo-project'];
+  });
+  expect(stored?.map((draft) => draft.page.title)).toEqual(['Home', 'Settings', 'Pushed']);
+});
+
+test('a page restored from the back/forward cache reconnects to the panel', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  const { page, panel } = await openReview(context, worker, extensionId);
+  await page.evaluate(() => {
+    addEventListener('pageshow', (event) => {
+      document.documentElement.dataset.restored = String(event.persisted);
+    });
+  });
+  await page.locator('#about-link').click();
+  await expect(page).toHaveTitle('About · Demo Shop');
+  // A cache restore fires no load event, so wait only for the navigation to commit.
+  await page.goBack({ waitUntil: 'commit' });
+  await expect(page).toHaveTitle('Demo Shop');
+  // Guards the test itself: the page really came out of the cache rather than reloading.
+  await expect(page.locator('html')).toHaveAttribute('data-restored', 'true');
+
+  await expect(panel.getByText('demo-project · build-001')).toBeVisible();
+  await setMode(panel, 'Select');
+  await pinComment(page, '#title', 'Still works');
+  await expect(page.locator('[data-vf-pin="draft"]')).toHaveCount(1);
+});
+
+test('a page the extension is not running in asks for a reload', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  const panel = await openPanelOnBlankTab(context, worker, extensionId);
+  await expect(panel.getByText('If this is a preview build, reload the page.')).toBeVisible();
+  await expect(panel.getByText('This page is not a preview build')).toHaveCount(0);
+});
+
+test('a click picks the highlighted element after the keyboard moved the selection', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  const { page, panel } = await openReview(context, worker, extensionId);
+  await setMode(panel, 'Select');
+  await page.locator('#tagline').hover();
+  await panel.keyboard.press('ArrowUp');
+  await panel.keyboard.press('ArrowDown');
+  await expect(page.locator('.vf-highlight__label')).toHaveText('h1 · src/pages/Home.tsx:12');
+
+  await pinComment(page, '#tagline', 'About the headline');
+  const drafts = panel.getByRole('region', { name: 'Drafts' });
+  await expect(drafts.getByText('Element · src/pages/Home.tsx:12')).toBeVisible();
 });

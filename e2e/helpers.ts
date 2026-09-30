@@ -27,6 +27,24 @@ export async function openReview(
   return { page, panel };
 }
 
+/** Opens the side panel UI bound to a blank tab, which no content script runs in. */
+export async function openPanelOnBlankTab(
+  context: BrowserContext,
+  worker: Worker,
+  extensionId: string,
+): Promise<Page> {
+  const known = await worker.evaluate(async () => (await chrome.tabs.query({})).map((t) => t.id));
+  await context.newPage();
+  const tabId = await worker.evaluate(
+    async (ids) => (await chrome.tabs.query({})).map((t) => t.id).find((id) => !ids.includes(id)),
+    known,
+  );
+  expect(tabId).toBeDefined();
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html?tabId=${tabId}`);
+  return panel;
+}
+
 export async function setMode(panel: Page, mode: 'Off' | 'Select' | 'Text'): Promise<void> {
   await panel.getByRole('button', { name: mode, exact: true }).click();
 }

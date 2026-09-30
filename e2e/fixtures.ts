@@ -11,6 +11,8 @@ export const test = base.extend<Fixtures>({
   context: async ({}, use) => {
     const context = await chromium.launchPersistentContext('', {
       channel: 'chromium',
+      // Playwright turns the back/forward cache off; real Chrome has it on.
+      ignoreDefaultArgs: ['--disable-back-forward-cache'],
       args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
     });
     await use(context);

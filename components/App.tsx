@@ -6,7 +6,7 @@ import { describeElement } from '@/lib/element-descriptor';
 import { createItem, currentEnv } from '@/lib/feedback-factory';
 import { readPageContext } from '@/lib/page-context';
 import { type Pin, pagePins } from '@/lib/pins';
-import { planTextEdit } from '@/lib/text-edit';
+import { findTextEditDraft, planTextEdit } from '@/lib/text-edit';
 import type { Anchor, FeedbackItem, Mode, PageContext, SentFeedback } from '@/lib/types';
 import { CommentPopover } from './CommentPopover';
 import { HighlightBox } from './HighlightBox';
@@ -20,6 +20,11 @@ type Composer =
   | { type: 'edit'; element: Element; item: FeedbackItem };
 
 type Props = { ctx: ContentScriptContext; host: HTMLElement };
+
+/** Apps often set the title after the route changes, so read it when the item is created. */
+function withLiveTitle(context: PageContext): PageContext {
+  return { ...context, title: document.title };
+}
 
 export function App({ ctx, host }: Props) {
   const [context, setContext] = useState<PageContext | null>(() =>
@@ -53,7 +58,7 @@ export function App({ ctx, host }: Props) {
       case 'create-page-comment':
         if (current) {
           const item = createItem(
-            { kind: 'page', comment: message.comment, context: current },
+            { kind: 'page', comment: message.comment, context: withLiveTitle(current) },
             currentEnv(window),
           );
           void addDraft(current.projectId, item);
@@ -62,11 +67,14 @@ export function App({ ctx, host }: Props) {
     }
   });
 
-  // SPA route changes do not reload the content script, so re-read the context.
+  // SPA route changes do not reload the content script, so re-read the context. The event
+  // fires before the new URL is committed, so `location` is read on the next task, not now.
   useEffect(() => {
     ctx.addEventListener(window, 'wxt:locationchange', () => {
-      setComposer(null);
-      setContext(readPageContext(document, location));
+      ctx.setTimeout(() => {
+        setComposer(null);
+        setContext(readPageContext(document, location));
+      }, 0);
     });
   }, [ctx]);
 
@@ -124,7 +132,7 @@ export function App({ ctx, host }: Props) {
     if (!composer) return;
     if (composer.type === 'new') {
       const item = createItem(
-        { kind: 'element', comment, context, anchor: composer.anchor },
+        { kind: 'element', comment, context: withLiveTitle(context), anchor: composer.anchor },
         currentEnv(window),
       );
       void addDraft(context.projectId, item);
@@ -140,11 +148,10 @@ export function App({ ctx, host }: Props) {
   };
 
   const handleEdited = ({ element, anchor, before, after }: TextEditResult) => {
-    const existing = drafts.find(
-      (draft) =>
-        draft.kind === 'text-edit' &&
-        draft.anchor !== undefined &&
-        resolveAnchor(draft.anchor, document) === element,
+    const existing = findTextEditDraft(
+      drafts,
+      context.path,
+      (draftAnchor) => resolveAnchor(draftAnchor, document) === element,
     );
     const change = planTextEdit(existing, before, after);
     if (!change) return;
@@ -155,7 +162,13 @@ export function App({ ctx, host }: Props) {
       setComposer({ type: 'edit', element, item: { ...existing, textEdit: change.textEdit } });
     } else if (change.type === 'create') {
       const item = createItem(
-        { kind: 'text-edit', comment: '', context, anchor, textEdit: change.textEdit },
+        {
+          kind: 'text-edit',
+          comment: '',
+          context: withLiveTitle(context),
+          anchor,
+          textEdit: change.textEdit,
+        },
         currentEnv(window),
       );
       void addDraft(context.projectId, item);
