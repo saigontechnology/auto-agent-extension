@@ -1,5 +1,9 @@
+import type { browser } from 'wxt/browser';
 import { expect, test } from './fixtures';
 import { openReview } from './helpers';
+
+// Init scripts run inside the extension page, where `chrome` exists.
+declare const chrome: typeof browser;
 
 test('options refuse incomplete real-API settings and keep mock as the default', async ({
   context,
@@ -53,4 +57,23 @@ test('switching to the real API asks for sign-in; switching back restores mock',
   await options.getByRole('button', { name: 'Save' }).click();
   await expect(panel.getByText('Mock', { exact: true })).toBeVisible();
   await expect(panel.getByRole('button', { name: 'Sign in' })).toHaveCount(0);
+});
+
+test('an edit made while saved settings are still loading is not overwritten', async ({
+  context,
+  extensionId,
+}) => {
+  const options = await context.newPage();
+  // Make reading storage slow, as it can be on a busy machine.
+  await options.addInitScript(() => {
+    const local = chrome.storage.local;
+    const get = local.get.bind(local) as (...args: unknown[]) => Promise<unknown>;
+    local.get = ((...args: unknown[]) =>
+      new Promise((resolve) => setTimeout(resolve, 600)).then(() => get(...args))) as typeof local.get;
+  });
+  await options.goto(`chrome-extension://${extensionId}/options.html`);
+
+  await options.getByLabel('Use mock API').uncheck();
+  await options.waitForTimeout(900);
+  await expect(options.getByLabel('Use mock API')).not.toBeChecked();
 });

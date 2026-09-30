@@ -1,7 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { browser } from 'wxt/browser';
 import {
-  DEFAULT_SETTINGS,
   getSettings,
   normalizeSettings,
   requiredOrigins,
@@ -13,15 +12,19 @@ import type { OAuthSettings, Settings } from '@/lib/types';
 type Status = { kind: 'ok' | 'error'; messages: string[] };
 
 export function App() {
-  const [form, setForm] = useState<Settings>(DEFAULT_SETTINGS);
+  const [form, setForm] = useState<Settings | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
 
   useEffect(() => {
     void getSettings().then(setForm);
   }, []);
 
+  // The form is rendered only once the saved settings have loaded; otherwise an edit made
+  // in the meantime would be overwritten when they arrive.
+  if (!form) return null;
+
   const setOAuth = (patch: Partial<OAuthSettings>) =>
-    setForm((current) => ({ ...current, oauth: { ...current.oauth, ...patch } }));
+    setForm({ ...form, oauth: { ...form.oauth, ...patch } });
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
