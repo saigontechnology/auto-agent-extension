@@ -1,16 +1,6 @@
-import { type FormEvent, useEffect, useState } from 'react';
-import { browser } from 'wxt/browser';
-import { LOCAL_ONLY } from '@/lib/config';
-import {
-  getSettings,
-  normalizeSettings,
-  requiredOrigins,
-  saveSettings,
-  validateSettings,
-} from '@/lib/settings-store';
-import type { OAuthSettings, Settings } from '@/lib/types';
-
-type Status = { kind: 'ok' | 'error'; messages: string[] };
+import { useEffect, useState } from 'react';
+import { type Session, getSession, watchSession } from '@/lib/auth/session';
+import { sendToBackground } from '@/lib/background-client';
 
 function CompanyLogo() {
   return (
@@ -28,130 +18,35 @@ function CompanyLogo() {
 }
 
 export function App() {
-  const [form, setForm] = useState<Settings | null>(null);
-  const [status, setStatus] = useState<Status | null>(null);
+  // Undefined until the stored session has been read, so the page does not flash "Not signed in".
+  const [session, setSession] = useState<Session | null | undefined>(undefined);
 
   useEffect(() => {
-    void getSettings().then(setForm);
+    void getSession().then(setSession);
+    return watchSession(setSession);
   }, []);
 
-  if (LOCAL_ONLY) {
-    return (
-      <div className="options">
-        <CompanyLogo />
-        <h1>Auto Agent options</h1>
-        <p className="notice">
-          API settings are turned off in this build. Feedback is stored in this browser only.
-        </p>
-      </div>
-    );
-  }
-
-  // The form is rendered only once the saved settings have loaded; otherwise an edit made
-  // in the meantime would be overwritten when they arrive.
-  if (!form) return null;
-
-  const setOAuth = (patch: Partial<OAuthSettings>) =>
-    setForm({ ...form, oauth: { ...form.oauth, ...patch } });
-
-  const onSubmit = async (event: FormEvent) => {
-    event.preventDefault();
-    const next = normalizeSettings(form);
-    const errors = validateSettings(next);
-    if (errors.length > 0) {
-      setStatus({ kind: 'error', messages: errors });
-      return;
-    }
-    if (!next.useMock) {
-      // Must stay the first await: Chrome only allows permission prompts inside a user gesture.
-      const granted = await browser.permissions
-        .request({ origins: requiredOrigins(next) })
-        .catch(() => false);
-      if (!granted) {
-        setStatus({
-          kind: 'error',
-          messages: ['Access to the API host was not granted, so nothing was saved.'],
-        });
-        return;
-      }
-    }
-    await saveSettings(next);
-    setForm(next);
-    setStatus({ kind: 'ok', messages: ['Saved.'] });
-  };
-
   return (
-    <form className="options" onSubmit={(event) => void onSubmit(event)}>
+    <div className="options">
       <CompanyLogo />
       <h1>Auto Agent options</h1>
-
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={form.useMock}
-          onChange={(event) => setForm({ ...form, useMock: event.target.checked })}
-        />
-        Use mock API (feedback stays in this browser)
-      </label>
-
-      <fieldset disabled={form.useMock}>
-        <label>
-          API base URL
-          <input
-            type="url"
-            placeholder="https://tool.example.com/api"
-            value={form.apiBase}
-            onChange={(event) => setForm({ ...form, apiBase: event.target.value })}
-          />
-        </label>
-        <label>
-          OAuth authorize URL
-          <input
-            type="url"
-            value={form.oauth.authorizeUrl}
-            onChange={(event) => setOAuth({ authorizeUrl: event.target.value })}
-          />
-        </label>
-        <label>
-          OAuth token URL
-          <input
-            type="url"
-            value={form.oauth.tokenUrl}
-            onChange={(event) => setOAuth({ tokenUrl: event.target.value })}
-          />
-        </label>
-        <label>
-          OAuth client ID
-          <input
-            type="text"
-            value={form.oauth.clientId}
-            onChange={(event) => setOAuth({ clientId: event.target.value })}
-          />
-        </label>
-        <label>
-          OAuth scopes (space separated)
-          <input
-            type="text"
-            value={form.oauth.scopes}
-            onChange={(event) => setOAuth({ scopes: event.target.value })}
-          />
-        </label>
-        <p className="notice">
-          Register this redirect URI with the tool: <code>{browser.identity.getRedirectURL()}</code>
-        </p>
-      </fieldset>
-
-      {status && (
-        <div className={status.kind === 'error' ? 'error' : 'notice'} role="status">
-          {status.messages.map((message) => (
-            <p key={message}>{message}</p>
-          ))}
-        </div>
+      {session === null && (
+        <p className="notice">Not signed in. Open the Auto Agent panel on a page to sign in.</p>
       )}
-
-      <button type="submit" className="primary submit">
-        Save
-      </button>
-    </form>
+      {session && (
+        <>
+          <p className="options__account">
+            Signed in as <strong>{session.user.displayName}</strong> ({session.user.username})
+          </p>
+          <button
+            type="button"
+            className="primary submit"
+            onClick={() => void sendToBackground({ type: 'sign-out' })}
+          >
+            Sign out
+          </button>
+        </>
+      )}
+    </div>
   );
 }

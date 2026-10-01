@@ -824,3 +824,132 @@ button.danger {
   grid-column: 1 / -1;
   margin-top: 6px;
 }
+
+/* Sign-in */
+
+.signin {
+  display: grid;
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.signin__button {
+  justify-self: start;
+  padding: 8px 18px;
+}
+
+.header__user {
+  max-width: 160px;
+  overflow: hidden;
+  font-size: 13px;
+  color: #d6d3d1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The demo the page belongs to */
+
+.demo {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.demo__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.demo__name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.picker {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.picker label {
+  display: grid;
+  gap: 4px;
+  font-weight: 500;
+}
+
+.picker select {
+  padding: 6px 8px;
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.picker .error {
+  margin-top: 0;
+}
+
+/* Sent, grouped by feedback run */
+
+.runs > li + li {
+  margin-top: 12px;
+}
+
+.run__heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.run__title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+}
+
+.run__link {
+  font-weight: 500;
+  color: var(--green-text);
+}
+
+.chip {
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.chip--pending {
+  color: var(--muted);
+}
+
+.chip--running {
+  color: var(--green-text);
+  border-color: var(--green-text);
+}
+
+.chip--done {
+  color: var(--ink-deep);
+  background: var(--green);
+  border-color: var(--green);
+}
+
+.chip--failed {
+  color: var(--danger);
+  border-color: var(--danger);
+}

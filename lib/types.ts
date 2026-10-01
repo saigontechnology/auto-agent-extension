@@ -93,12 +93,3 @@ export type PageContext = {
 };
 
 export type Mode = 'off' | 'select' | 'text';
-
-export type OAuthSettings = {
-  authorizeUrl: string;
-  tokenUrl: string;
-  clientId: string;
-  scopes: string;
-};
-
-export type Settings = { useMock: boolean; apiBase: string; oauth: OAuthSettings };

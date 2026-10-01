@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type Browser, browser } from 'wxt/browser';
-import { watchTokens } from '@/lib/auth/oauth';
+import type { FeedbackRun } from '@/lib/api/auto-agent-client';
+import type { JobMatch } from '@/lib/api/job-matcher';
+import { watchSession } from '@/lib/auth/session';
 import { sendToBackground } from '@/lib/background-client';
 import { listDrafts, watchDrafts } from '@/lib/draft-store';
 import { listFeedback, watchFeedback } from '@/lib/feedback-store';
@@ -9,10 +11,9 @@ import {
   type ContentToPanel,
   PANEL_PORT,
   type PanelToContent,
-  type Result,
   isContentReady,
 } from '@/lib/messages';
-import { watchSettings } from '@/lib/settings-store';
+import { hasUnfinishedRuns } from '@/lib/sent-groups';
 import type { FeedbackItem, Mode, PageContext, SentFeedback } from '@/lib/types';
 
 /**
@@ -186,6 +187,7 @@ export function useDrafts(projectId: string | undefined): FeedbackItem[] {
 export type Auth = {
   state: AuthState | null;
   error: string | null;
+  busy: boolean;
   signIn: () => void;
   signOut: () => void;
 };
@@ -193,37 +195,56 @@ export type Auth = {
 export function useAuth(): Auth {
   const [state, setState] = useState<AuthState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const signedIn = useRef(false);
+  // Set while the reviewer signs out, so that is not reported as an ended session.
+  const leaving = useRef(false);
 
-  const apply = useCallback((result: Result<AuthState>) => {
-    if (result.ok) {
-      setState(result.value);
+  const apply = useCallback((next: AuthState) => {
+    if (signedIn.current && !next.signedIn && !leaving.current) {
+      setError('Your session ended. Sign in again.');
+    } else if (next.signedIn) {
       setError(null);
-    } else {
-      setError(result.error);
     }
+    signedIn.current = next.signedIn;
+    leaving.current = false;
+    setState(next);
   }, []);
 
   const refresh = useCallback(() => {
-    void sendToBackground({ type: 'auth-state' }).then(apply);
+    void sendToBackground({ type: 'auth-state' }).then((result) => {
+      if (result.ok) apply(result.value);
+      else setError(result.error);
+    });
   }, [apply]);
 
-  // Tokens also change outside this panel, for example when the API rejects them.
+  // The session also changes outside this panel: a failed refresh, or Options.
   useEffect(() => {
     refresh();
-    const unwatchSettings = watchSettings(refresh);
-    const unwatchTokens = watchTokens(refresh);
-    return () => {
-      unwatchSettings();
-      unwatchTokens();
-    };
+    return watchSession(refresh);
   }, [refresh]);
 
-  return {
-    state,
-    error,
-    signIn: () => void sendToBackground({ type: 'sign-in' }).then(apply),
-    signOut: () => void sendToBackground({ type: 'sign-out' }).then(apply),
+  const signIn = () => {
+    setBusy(true);
+    setError(null);
+    void sendToBackground({ type: 'sign-in' }).then((result) => {
+      setBusy(false);
+      if (result.ok) apply(result.value);
+      else setError(result.error);
+    });
   };
+
+  const signOut = () => {
+    leaving.current = true;
+    setBusy(true);
+    void sendToBackground({ type: 'sign-out' }).then((result) => {
+      setBusy(false);
+      if (result.ok) apply(result.value);
+      else setError(result.error);
+    });
+  };
+
+  return { state, error, busy, signIn, signOut };
 }
 
 /** Watches the feedback sent from the open page and mirrors it to the page for pins. */
@@ -259,4 +280,145 @@ export function useSent(
   }, [context, sent, send]);
 
   return sent;
+}
+
+export type JobState =
+  | { status: 'idle' }
+  | { status: 'resolving' }
+  | { status: 'matched'; match: JobMatch }
+  /** The picker is open; `previous` is the demo to go back to on Cancel. */
+  | { status: 'choosing'; previous: JobMatch | null; error: string | null };
+
+export type JobMatching = {
+  state: JobState;
+  choose: (match: JobMatch) => void;
+  change: () => void;
+  cancel: () => void;
+  retry: () => void;
+};
+
+/** Which demo job the page belongs to: found by its site, or chosen by the reviewer. */
+export function useJobMatch(url: string | undefined, enabled: boolean): JobMatching {
+  const [state, setState] = useState<JobState>({ status: 'idle' });
+  const [attempt, setAttempt] = useState(0);
+  const urlRef = useRef(url);
+  urlRef.current = url;
+  // Every page of a demo belongs to the same job, so a route change must not look it up again.
+  const origin = useMemo(() => {
+    try {
+      return url ? new URL(url).origin : null;
+    } catch {
+      return null;
+    }
+  }, [url]);
+
+  useEffect(() => {
+    const pageUrl = urlRef.current;
+    if (!enabled || !origin || !pageUrl) {
+      setState({ status: 'idle' });
+      return;
+    }
+    let active = true;
+    setState({ status: 'resolving' });
+    void sendToBackground({ type: 'resolve-job', url: pageUrl }).then((result) => {
+      if (!active) return;
+      if (result.ok && result.value) setState({ status: 'matched', match: result.value });
+      else setState({ status: 'choosing', previous: null, error: result.ok ? null : result.error });
+    });
+    return () => {
+      active = false;
+    };
+  }, [origin, enabled, attempt]);
+
+  const choose = (match: JobMatch) => {
+    const pageUrl = urlRef.current;
+    if (!pageUrl) return;
+    void sendToBackground({ type: 'choose-job', url: pageUrl, match }).then((result) => {
+      if (result.ok) setState({ status: 'matched', match: result.value });
+      else setState({ status: 'choosing', previous: null, error: result.error });
+    });
+  };
+
+  return {
+    state,
+    choose,
+    change: () =>
+      setState((current) => ({
+        status: 'choosing',
+        previous: current.status === 'matched' ? current.match : null,
+        error: null,
+      })),
+    cancel: () =>
+      setState((current) =>
+        current.status === 'choosing' && current.previous ? { status: 'matched', match: current.previous } : current,
+      ),
+    retry: () => setAttempt((n) => n + 1),
+  };
+}
+
+const RUN_POLL_MS = 10_000;
+
+/**
+ * The feedback runs on the page's demo, asked for again every 10 seconds while one is
+ * unfinished and the panel is visible.
+ */
+export function useRuns(
+  url: string | undefined,
+  demoJobId: string | null,
+  sent: SentFeedback[],
+  onForbidden: () => void,
+): { runs: FeedbackRun[]; error: string | null; reload: () => void } {
+  const [runs, setRuns] = useState<FeedbackRun[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
+  const urlRef = useRef(url);
+  urlRef.current = url;
+  const forbiddenRef = useRef(onForbidden);
+  forbiddenRef.current = onForbidden;
+
+  useEffect(() => {
+    setRuns([]);
+    setError(null);
+  }, [demoJobId]);
+
+  useEffect(() => {
+    const pageUrl = urlRef.current;
+    if (!demoJobId || !pageUrl) return;
+    let active = true;
+    void sendToBackground({ type: 'job-runs', url: pageUrl }).then((result) => {
+      if (!active) return;
+      if (result.ok) {
+        setRuns(result.value);
+        setError(null);
+      } else {
+        setError(result.error);
+        if (result.code === 'forbidden') forbiddenRef.current();
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [demoJobId, tick]);
+
+  const waiting = useMemo(
+    () => demoJobId !== null && hasUnfinishedRuns(sent, runs, demoJobId),
+    [sent, runs, demoJobId],
+  );
+
+  useEffect(() => {
+    if (!waiting) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const schedule = () => {
+      clearTimeout(timer);
+      if (document.visibilityState === 'visible') timer = setTimeout(() => setTick((n) => n + 1), RUN_POLL_MS);
+    };
+    schedule();
+    document.addEventListener('visibilitychange', schedule);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', schedule);
+    };
+  }, [waiting, tick]);
+
+  return { runs, error, reload: () => setTick((n) => n + 1) };
 }

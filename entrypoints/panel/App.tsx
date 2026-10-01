@@ -1,29 +1,34 @@
-import { useEffect, useMemo, useState } from 'react';
-import { browser } from 'wxt/browser';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { BrandMark } from '@/components/BrandMark';
 import { flowEditsOf, flowPatch, isSendable } from '@/lib/flow/flow-item';
 import { stepAnchor } from '@/lib/flow/step-label';
 import { MAX_STEPS } from '@/lib/flow/steps';
-import { feedbackPayload } from '@/lib/api/feedback-payload';
+import { feedbackFileName, feedbackPayload } from '@/lib/api/feedback-payload';
 import { sendToBackground } from '@/lib/background-client';
 import { clientInfo } from '@/lib/client-info';
-import { LOCAL_ONLY, WORKFLOW_RECORDING } from '@/lib/config';
+import { WORKFLOW_RECORDING } from '@/lib/config';
 import { removeDraft, updateDraft } from '@/lib/draft-store';
 import { setFeedbackStatus } from '@/lib/feedback-store';
 import type { FlowRequest } from '@/lib/messages';
 import { groupDrafts, pagePins } from '@/lib/pins';
+import { groupSent } from '@/lib/sent-groups';
 import type { FeedbackItem, FlowStep, Mode } from '@/lib/types';
 import { Checkbox } from './Checkbox';
 import { DraftRow } from './DraftRow';
 import { FlowReview } from './FlowReview';
+import { JobPicker } from './JobPicker';
 import { RecordingBar } from './RecordingBar';
+import { RunGroup } from './RunGroup';
 import { useGoTo, useRecording } from './flow-hooks';
 import { SentRow } from './SentRow';
+import { SignIn } from './SignIn';
 import {
   type ConnectionStatus,
   useAuth,
   useDrafts,
+  useJobMatch,
   usePanelConnection,
+  useRuns,
   useSent,
   useTargetTab,
 } from './hooks';
@@ -62,6 +67,11 @@ export function App() {
   const drafts = useDrafts(context?.projectId);
   const auth = useAuth();
   const sent = useSent(context, send);
+  const signedIn = auth.state?.signedIn === true;
+  const jobs = useJobMatch(context?.url, signedIn);
+  const match = jobs.state.status === 'matched' ? jobs.state.match : null;
+  const runs = useRuns(context?.url, match?.jobId ?? null, sent, jobs.retry);
+  const sentGroups = useMemo(() => groupSent(sent, runs.runs), [sent, runs.runs]);
   const recording = useRecording(tabId);
   const recordingActive = recording?.status === 'recording' || recording?.status === 'paused';
   const [flowError, setFlowError] = useState<string | null>(null);
@@ -143,6 +153,8 @@ export function App() {
   const [pageComment, setPageComment] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  // Two clicks in one frame both see `sending` false; the ref stops the second from starting a run.
+  const sendingRef = useRef(false);
 
   const numbers = useMemo(() => {
     const pins = context ? pagePins(drafts, sent, context.path) : [];
@@ -167,18 +179,14 @@ export function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [mode, send, setMode]);
 
-  const openOptions = () => void browser.runtime.openOptionsPage();
-
-  const accountActions = !LOCAL_ONLY && (
+  const user = auth.state?.user;
+  const accountActions = user && (
     <div className="header__actions">
-      {auth.state && !auth.state.useMock && auth.state.configured && (
-        <button type="button" onClick={auth.state.signedIn ? auth.signOut : auth.signIn}>
-          {auth.state.signedIn ? 'Sign out' : 'Sign in'}
-        </button>
-      )}
-      {auth.state?.useMock && <span className="tag">Mock</span>}
-      <button type="button" onClick={openOptions}>
-        Options
+      <span className="header__user" title={user.username}>
+        {user.displayName}
+      </span>
+      <button type="button" onClick={auth.signOut} disabled={auth.busy}>
+        Sign out
       </button>
     </div>
   );
@@ -195,6 +203,21 @@ export function App() {
       </div>
     </header>
   );
+
+  if (!auth.state || !auth.state.signedIn) {
+    return (
+      <div className="panel">
+        {header}
+        <div className="panel__body">
+          {auth.state ? (
+            <SignIn busy={auth.busy} error={auth.error} onSignIn={auth.signIn} />
+          ) : (
+            auth.error && <p className="error">{auth.error}</p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (review) {
     return (
@@ -258,26 +281,63 @@ export function App() {
     );
   }
   const groups = groupDrafts(drafts, context.path);
-  const canSend = auth.state !== null && auth.state.configured && auth.state.signedIn;
+  const canSend = match !== null;
 
   const submit = async () => {
+    if (sendingRef.current) return;
+    sendingRef.current = true;
     setSending(true);
     setSendError(null);
     const result = await sendToBackground({
       type: 'submit',
       projectId,
+      url: context.url,
       ids: chosen.map((draft) => draft.id),
     });
+    sendingRef.current = false;
     setSending(false);
-    if (!result.ok) setSendError(result.error);
+    if (result.ok) {
+      runs.reload();
+    } else {
+      setSendError(result.error);
+      if (result.code === 'forbidden') jobs.retry();
+    }
   };
 
-  // Lets the tool be tried before the API exists: the file holds the exact body Send will POST.
+  // The same file Send uploads, for a reviewer who wants to keep or inspect it.
   const exportDrafts = () => {
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const name = projectId.replace(/[^\w.-]+/g, '-');
-    downloadJson(`auto-agent-feedback-${name}-${stamp}.json`, feedbackPayload(chosen, clientInfo()));
+    downloadJson(feedbackFileName(projectId, new Date()), feedbackPayload(chosen, clientInfo()));
   };
+
+  let demo: ReactNode = null;
+  if (jobs.state.status === 'resolving') {
+    demo = <p className="demo muted">Finding this demo in Auto Agent…</p>;
+  } else if (jobs.state.status === 'matched') {
+    demo = (
+      <div className="demo">
+        <span className="demo__label">Demo</span>
+        <span className="demo__name">
+          {jobs.state.match.projectName} · {jobs.state.match.jobName}
+        </span>
+        <button type="button" className="link" onClick={jobs.change}>
+          Change
+        </button>
+      </div>
+    );
+  } else if (jobs.state.status === 'choosing') {
+    demo = (
+      <JobPicker
+        note={
+          jobs.state.previous
+            ? 'Choose the demo this page belongs to:'
+            : 'This page did not match any of your demos. Choose one:'
+        }
+        error={jobs.state.error}
+        onChoose={jobs.choose}
+        onCancel={jobs.state.previous ? jobs.cancel : undefined}
+      />
+    );
+  }
 
   const addPageComment = () => {
     const comment = pageComment?.trim();
@@ -301,14 +361,7 @@ export function App() {
       {header}
       <div className="panel__body">
         {auth.error && <p className="error">{auth.error}</p>}
-        {auth.state && !auth.state.configured && (
-          <p className="notice">
-            The API is not set up yet.{' '}
-            <button type="button" className="link" onClick={openOptions}>
-              Open Options
-            </button>
-          </p>
-        )}
+        {demo}
 
         {flowError && <p className="error">{flowError}</p>}
 
@@ -411,27 +464,26 @@ export function App() {
           </section>
 
           <section aria-label="Sent">
-            <h2>Sent on this page ({sent.length})</h2>
-            {sent.length === 0 && (
-              <p className="empty">Nothing has been sent from this page yet.</p>
-            )}
-            <ul>
-              {sent.map((item) => (
-                <SentRow
-                  key={item.id}
-                  item={item}
-                  number={numbers.get(item.id)}
-                  missing={missing.has(item.id)}
-                  missingSteps={missingSteps}
-                  onGoTo={(step) => goTo(item, step)}
-                  onFocus={
-                    numbers.has(item.id)
-                      ? () => send({ type: 'focus-item', id: item.id })
-                      : undefined
-                  }
-                  onResolve={() => void setFeedbackStatus(projectId, item.id, 'resolved')}
-                  onReopen={() => void setFeedbackStatus(projectId, item.id, 'open')}
-                />
+            <h2>Sent</h2>
+            {runs.error && <p className="error">{runs.error}</p>}
+            {sentGroups.length === 0 && <p className="empty">Nothing has been sent to this demo yet.</p>}
+            <ul className="runs">
+              {sentGroups.map((group) => (
+                <RunGroup key={group.key} group={group}>
+                  {group.items.map((item) => (
+                    <SentRow
+                      key={item.id}
+                      item={item}
+                      number={numbers.get(item.id)}
+                      missing={missing.has(item.id)}
+                      missingSteps={missingSteps}
+                      onGoTo={(step) => goTo(item, step)}
+                      onFocus={numbers.has(item.id) ? () => send({ type: 'focus-item', id: item.id }) : undefined}
+                      onResolve={() => void setFeedbackStatus(projectId, item.id, 'resolved')}
+                      onReopen={() => void setFeedbackStatus(projectId, item.id, 'open')}
+                    />
+                  ))}
+                </RunGroup>
               ))}
             </ul>
           </section>
@@ -447,9 +499,7 @@ export function App() {
             </button>
           </p>
         )}
-        {auth.state && auth.state.configured && !auth.state.signedIn && (
-          <p className="muted">Sign in to send your drafts.</p>
-        )}
+        {!canSend && <p className="muted">Choose the demo this page belongs to before sending.</p>}
         <div className="footer__buttons">
           <button type="button" disabled={chosen.length === 0} onClick={exportDrafts}>
             Export JSON
