@@ -58,13 +58,25 @@ export async function listDemoJobs(client: AutoAgentClient, project: Project): P
     .sort(newestFirst);
 }
 
-/** The job list has no deployment URL, so each new job's detail is read once. */
+/**
+ * The job list has no deployment URL, so each new job's detail is read once. A job whose detail
+ * cannot be read counts as having no URL for this scan and is asked about again next time, so
+ * one bad job does not stop the others from matching.
+ */
 async function deploymentUrls(client: AutoAgentClient, jobs: JobMatch[]): Promise<Record<string, string | null>> {
   const known = await urlsItem.getValue();
   const missing = jobs.filter((job) => !(job.jobId in known));
   if (missing.length === 0) return known;
-  const fetched = await mapLimit(missing, CONCURRENCY, async (job) => (await client.getJob(job.jobId)).deploymentUrl);
-  const update = Object.fromEntries(missing.map((job, index) => [job.jobId, fetched[index] ?? null]));
+  const fetched = await mapLimit(missing, CONCURRENCY, async (job) => {
+    try {
+      return (await client.getJob(job.jobId)).deploymentUrl;
+    } catch {
+      return undefined;
+    }
+  });
+  const update = Object.fromEntries(
+    missing.flatMap((job, index) => (fetched[index] === undefined ? [] : [[job.jobId, fetched[index]]])),
+  );
   await urlsItem.setValue({ ...(await urlsItem.getValue()), ...update });
   return { ...known, ...update };
 }

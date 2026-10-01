@@ -95,6 +95,16 @@ describe('job resolver', () => {
     expect(client.getJob).not.toHaveBeenCalled();
   });
 
+  it('still matches when one job’s detail cannot be read', async () => {
+    const client = makeClient();
+    const getJob = client.getJob;
+    client.getJob = vi.fn(async (id: string) => {
+      if (id === 'shop') throw new Error('Auto Agent sent an unexpected response.');
+      return getJob(id);
+    });
+    expect(await resolveJob(client, 'https://app.web.app')).toMatchObject({ jobId: 'app' });
+  });
+
   it('keeps a chosen demo for the origin until it is forgotten', async () => {
     const chosen = {
       projectId: 'p1',

@@ -18,7 +18,15 @@ export type SessionDeps = {
   fetch: typeof fetch;
   now: () => number;
   newState: () => string;
-  launchWebAuthFlow: (details: { url: string; interactive: boolean }) => Promise<string | undefined>;
+  launchWebAuthFlow: (details: WebAuthFlowDetails) => Promise<string | undefined>;
+};
+
+/** The subset of `chrome.identity.launchWebAuthFlow`'s details that sign-in uses. */
+export type WebAuthFlowDetails = {
+  url: string;
+  interactive: boolean;
+  abortOnLoadForNonInteractive?: boolean;
+  timeoutMsForNonInteractive?: number;
 };
 
 export class SignInError extends Error {
@@ -36,6 +44,11 @@ const NO_SESSION_MESSAGE = 'Sign-in did not return a session. Try again.';
 /** Auto Agent's access tokens last 15 minutes; used only when a token's `exp` cannot be read. */
 const DEFAULT_LIFETIME_MS = 15 * 60_000;
 const EXPIRY_MARGIN_MS = 60_000;
+/**
+ * How long the silent attempt may take. A browser already signed in to the company account
+ * finishes Microsoft's redirects well within this; anyone else waits this long for the window.
+ */
+const SILENT_TIMEOUT_MS = 5000;
 
 const sessionItem = storage.defineItem<Session | null>('local:session', { fallback: null });
 
@@ -96,10 +109,13 @@ async function attempt(deps: SessionDeps, interactive: boolean): Promise<Session
   const state = deps.newState();
   let redirect: string | undefined;
   try {
-    redirect = await deps.launchWebAuthFlow({
-      url: buildLoginUrl(deps.apiBase, deps.redirectUri, state),
-      interactive,
-    });
+    const url = buildLoginUrl(deps.apiBase, deps.redirectUri, state);
+    redirect = await deps.launchWebAuthFlow(
+      interactive
+        ? { url, interactive }
+        : // Let Microsoft redirect on its own instead of giving up when its first page loads.
+          { url, interactive, abortOnLoadForNonInteractive: false, timeoutMsForNonInteractive: SILENT_TIMEOUT_MS },
+    );
   } catch {
     throw new SignInError(CANCELLED_MESSAGE);
   }

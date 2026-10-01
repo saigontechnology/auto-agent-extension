@@ -85,15 +85,7 @@ export default defineBackground(() => {
     fetch: (input, init) => fetch(input, init),
     now: () => Date.now(),
     newState: () => crypto.randomUUID(),
-    launchWebAuthFlow: ({ url, interactive }) =>
-      browser.identity.launchWebAuthFlow({
-        url,
-        interactive,
-        // The silent attempt lets Microsoft redirect on its own when the browser is already
-        // signed in to the company account.
-        abortOnLoadForNonInteractive: false,
-        timeoutMsForNonInteractive: 15_000,
-      }),
+    launchWebAuthFlow: (details) => browser.identity.launchWebAuthFlow(details),
   };
 
   const deps: HandlerDeps = {

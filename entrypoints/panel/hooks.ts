@@ -294,13 +294,13 @@ export type JobMatching = {
   choose: (match: JobMatch) => void;
   change: () => void;
   cancel: () => void;
-  retry: () => void;
+  /** The demo can no longer be reached: open the picker with `message` instead of looking again. */
+  forbid: (message: string) => void;
 };
 
 /** Which demo job the page belongs to: found by its site, or chosen by the reviewer. */
 export function useJobMatch(url: string | undefined, enabled: boolean): JobMatching {
   const [state, setState] = useState<JobState>({ status: 'idle' });
-  const [attempt, setAttempt] = useState(0);
   const urlRef = useRef(url);
   urlRef.current = url;
   // Every page of a demo belongs to the same job, so a route change must not look it up again.
@@ -328,7 +328,7 @@ export function useJobMatch(url: string | undefined, enabled: boolean): JobMatch
     return () => {
       active = false;
     };
-  }, [origin, enabled, attempt]);
+  }, [origin, enabled]);
 
   const choose = (match: JobMatch) => {
     const pageUrl = urlRef.current;
@@ -352,7 +352,8 @@ export function useJobMatch(url: string | undefined, enabled: boolean): JobMatch
       setState((current) =>
         current.status === 'choosing' && current.previous ? { status: 'matched', match: current.previous } : current,
       ),
-    retry: () => setAttempt((n) => n + 1),
+    // Looking the page up again would usually find the same demo and fail the same way.
+    forbid: (message) => setState({ status: 'choosing', previous: null, error: message }),
   };
 }
 
@@ -366,7 +367,7 @@ export function useRuns(
   url: string | undefined,
   demoJobId: string | null,
   sent: SentFeedback[],
-  onForbidden: () => void,
+  onForbidden: (message: string) => void,
 ): { runs: FeedbackRun[]; error: string | null; reload: () => void } {
   const [runs, setRuns] = useState<FeedbackRun[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -392,7 +393,7 @@ export function useRuns(
         setError(null);
       } else {
         setError(result.error);
-        if (result.code === 'forbidden') forbiddenRef.current();
+        if (result.code === 'forbidden') forbiddenRef.current(result.error);
       }
     });
     return () => {

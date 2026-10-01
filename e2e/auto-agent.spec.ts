@@ -79,3 +79,19 @@ test('a page that matches no demo asks which one it belongs to and remembers the
   await expect(panel.getByRole('region', { name: 'Sent' }).getByText('Works on any host')).toBeVisible();
   expect((await fakeApiState()).runs[0]!.demoJobId).toBe('job-other');
 });
+
+test('losing access to the demo says so and asks for another one', async ({ context, worker, extensionId }) => {
+  const { page, panel } = await openReview(context, worker, extensionId);
+  await expect(panel.getByText('Demo Shop · Frontend Demo #shop')).toBeVisible();
+  await setMode(panel, 'Select');
+  await page.bringToFront();
+  await pinComment(page, '#buy', 'Make this button bigger');
+  await panel.bringToFront();
+  await panel.getByRole('button', { name: 'Send 1 draft' }).click();
+  await expect(panel.getByRole('region', { name: 'Sent' }).getByText('Running', { exact: true })).toBeVisible();
+
+  // The next status poll finds the project gone.
+  await fetch(`${FAKE_API}/_forbid/p-shop`, { method: 'POST' });
+  const picker = panel.getByRole('form', { name: 'Choose demo' });
+  await expect(picker.getByText('You no longer have access to this demo.')).toBeVisible({ timeout: 15_000 });
+});

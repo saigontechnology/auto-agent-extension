@@ -191,6 +191,19 @@ describe('handleRequest', () => {
     expect(await listDrafts('p1')).toHaveLength(1);
   });
 
+  it('shows an upload refusal as it is, and keeps the demo', async () => {
+    await chooseJob(PAGE, MATCH);
+    await addDraft('p1', makeItem({ id: 'a' }));
+    const client = makeClient({
+      uploadFeedbackFile: vi.fn(async () => {
+        throw new ApiError('You are not allowed to upload feedback files', 403);
+      }),
+    });
+    const result = await handleRequest(submit(['a']), makeDeps({ client }));
+    expect(result).toEqual({ ok: false, code: 'failed', error: 'You are not allowed to upload feedback files' });
+    expect(await cachedJob(PAGE)).toEqual(MATCH);
+  });
+
   it('reports an ended session as unauthorized', async () => {
     await chooseJob(PAGE, MATCH);
     await addDraft('p1', makeItem({ id: 'a' }));

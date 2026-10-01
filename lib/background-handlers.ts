@@ -74,13 +74,14 @@ async function submit(
   const file = new File([JSON.stringify(feedbackPayload(drafts, deps.clientInfo()), null, 2)], fileName, {
     type: 'application/json',
   });
-  const run = await onDemoJob(request.url, async () => {
-    const fileId = await deps.client.uploadFeedbackFile(file);
-    return deps.client.createFeedbackRun(match.jobId, {
+  // An upload is not a call on the demo job: its refusal is shown as is and keeps the match.
+  const fileId = await deps.client.uploadFeedbackFile(file);
+  const run = await onDemoJob(request.url, () =>
+    deps.client.createFeedbackRun(match.jobId, {
       description: feedbackMarkdown(drafts, fileName),
       fileIds: [fileId],
-    });
-  });
+    }),
+  );
 
   const sent = drafts.map(
     (draft): SentFeedback => ({

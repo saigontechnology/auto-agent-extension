@@ -106,6 +106,16 @@ describe('session', () => {
     expect(await getSession()).toEqual(session);
   });
 
+  it('gives the silent attempt only a few seconds before showing the window', async () => {
+    const deps = makeDeps();
+    await signIn(deps);
+    expect(vi.mocked(deps.launchWebAuthFlow).mock.calls[0]![0]).toMatchObject({
+      interactive: false,
+      abortOnLoadForNonInteractive: false,
+      timeoutMsForNonInteractive: 5000,
+    });
+  });
+
   it('shows the Microsoft window when the silent attempt fails', async () => {
     const launch = vi
       .fn<SessionDeps['launchWebAuthFlow']>()

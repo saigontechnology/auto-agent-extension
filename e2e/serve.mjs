@@ -52,7 +52,8 @@ const JOBS = [
   },
 ];
 
-const fresh = () => ({ runs: [], uploads: [] });
+// `forbidden` holds project ids the test user has lost access to.
+const fresh = () => ({ runs: [], uploads: [], forbidden: [] });
 let state = fresh();
 
 function fakeJwt() {
@@ -104,6 +105,11 @@ async function fakeApi(request, response, url) {
     return reply(response, 200, run ?? null);
   }
 
+  if (path.startsWith('/_forbid/')) {
+    state.forbidden.push(path.slice('/_forbid/'.length));
+    return reply(response, 200, null);
+  }
+
   if (path === '/auth/login') {
     const redirect = new URL(url.searchParams.get('cli_redirect'));
     redirect.searchParams.set('token', fakeJwt());
@@ -119,8 +125,10 @@ async function fakeApi(request, response, url) {
 
   if (!request.headers.authorization?.startsWith('Bearer ')) return fail(response, 401, 'Authentication required');
 
+  const visible = (projectId) => !state.forbidden.includes(projectId);
   if (path === '/projects') {
-    return reply(response, 200, PROJECTS, { total: PROJECTS.length, page: 1, itemPerPage: 100 });
+    const projects = PROJECTS.filter((project) => visible(project.id));
+    return reply(response, 200, projects, { total: projects.length, page: 1, itemPerPage: 100 });
   }
   if (path === '/jobs') {
     const status = url.searchParams.get('status');
@@ -135,6 +143,10 @@ async function fakeApi(request, response, url) {
     const upload = { id: `file-${state.uploads.length + 1}`, name, body };
     state.uploads.push(upload);
     return reply(response, 201, [{ id: upload.id, originalName: name }]);
+  }
+  const forbiddenJob = /^\/jobs\/([^/]+)/.exec(path);
+  if (forbiddenJob && JOBS.some((job) => job.id === forbiddenJob[1] && !visible(job.projectId))) {
+    return fail(response, 403, 'You are not a member of this project');
   }
   const feedback = /^\/jobs\/([^/]+)\/feedback$/.exec(path);
   if (feedback && request.method === 'POST') {

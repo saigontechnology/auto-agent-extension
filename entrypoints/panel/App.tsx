@@ -70,7 +70,7 @@ export function App() {
   const signedIn = auth.state?.signedIn === true;
   const jobs = useJobMatch(context?.url, signedIn);
   const match = jobs.state.status === 'matched' ? jobs.state.match : null;
-  const runs = useRuns(context?.url, match?.jobId ?? null, sent, jobs.retry);
+  const runs = useRuns(context?.url, match?.jobId ?? null, sent, jobs.forbid);
   const sentGroups = useMemo(() => groupSent(sent, runs.runs), [sent, runs.runs]);
   const recording = useRecording(tabId);
   const recordingActive = recording?.status === 'recording' || recording?.status === 'paused';
@@ -300,7 +300,7 @@ export function App() {
       runs.reload();
     } else {
       setSendError(result.error);
-      if (result.code === 'forbidden') jobs.retry();
+      if (result.code === 'forbidden') jobs.forbid(result.error);
     }
   };
 
