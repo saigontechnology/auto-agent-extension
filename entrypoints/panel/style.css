@@ -746,3 +746,65 @@ h2 {
     color: #fdb022;
   }
 }
+
+/* Review */
+
+.review {
+  margin-top: 14px;
+}
+
+.review h2 {
+  margin-top: 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.field span {
+  font-weight: 500;
+}
+
+.field textarea {
+  min-height: 52px;
+}
+
+.review__steps {
+  margin: 18px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.review__actions,
+.review__confirm {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 0;
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+}
+
+.review__confirm {
+  justify-content: space-between;
+  color: var(--danger);
+}
+
+button.danger {
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+.row__meta {
+  font-size: 12px;
+  color: var(--muted);
+}

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { browser } from 'wxt/browser';
 import { BrandMark } from '@/components/BrandMark';
+import { flowEditsOf, flowPatch, isSendable } from '@/lib/flow/flow-item';
+import { MAX_STEPS } from '@/lib/flow/steps';
 import { feedbackPayload } from '@/lib/api/feedback-payload';
 import { sendToBackground } from '@/lib/background-client';
 import { clientInfo } from '@/lib/client-info';
@@ -9,9 +11,10 @@ import { removeDraft, updateDraft } from '@/lib/draft-store';
 import { setFeedbackStatus } from '@/lib/feedback-store';
 import type { FlowRequest } from '@/lib/messages';
 import { groupDrafts, pagePins } from '@/lib/pins';
-import type { Mode } from '@/lib/types';
+import type { FeedbackItem, FlowStep, Mode } from '@/lib/types';
 import { Checkbox } from './Checkbox';
 import { DraftRow } from './DraftRow';
+import { FlowReview } from './FlowReview';
 import { RecordingBar } from './RecordingBar';
 import { useRecording } from './flow-hooks';
 import { SentRow } from './SentRow';
@@ -68,12 +71,33 @@ export function App() {
     });
   };
 
+  const [editingFlow, setEditingFlow] = useState<FeedbackItem | null>(null);
+  // Task 10 makes hovering a step highlight its element on the page.
+  const hoverStep = (_step: FlowStep | null) => undefined;
+
+  const review =
+    recording?.status === 'stopped' ? (
+      <FlowReview
+        key={recording.startedAt}
+        heading="Review workflow"
+        initial={{ title: '', expected: '', actual: '', steps: recording.steps }}
+        notice={recording.limitReached ? `Reached the ${MAX_STEPS}-step limit, so recording stopped.` : undefined}
+        cancelLabel="Discard"
+        confirmCancel
+        onHoverStep={hoverStep}
+        onSave={(edits) => flowRequest({ type: 'flow-save', tabId: recording.tabId, edits })}
+        onCancel={() => flowRequest({ type: 'flow-discard', tabId: recording.tabId })}
+      />
+    ) : null;
+
   // Every draft goes into the next Send unless the reviewer unticks it, so only the drafts
   // left out are remembered and a new draft starts ticked.
   const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set());
   const projectKey = context?.projectId;
   useEffect(() => setExcluded(new Set()), [projectKey]);
-  const chosen = useMemo(() => drafts.filter((draft) => !excluded.has(draft.id)), [drafts, excluded]);
+  // A workflow without a title is never part of a Send, whatever its box says.
+  const sendable = useMemo(() => drafts.filter(isSendable), [drafts]);
+  const chosen = useMemo(() => sendable.filter((draft) => !excluded.has(draft.id)), [sendable, excluded]);
 
   const include = (id: string, included: boolean) =>
     setExcluded((current) => {
@@ -141,6 +165,18 @@ export function App() {
     </header>
   );
 
+  if (review) {
+    return (
+      <div className="panel">
+        {header}
+        <div className="panel__body">
+          {flowError && <p className="error">{flowError}</p>}
+          {review}
+        </div>
+      </div>
+    );
+  }
+
   if (!context) {
     return (
       <div className="panel">
@@ -153,6 +189,29 @@ export function App() {
   }
 
   const { projectId } = context;
+
+  if (editingFlow) {
+    return (
+      <div className="panel">
+        {header}
+        <div className="panel__body">
+          <FlowReview
+            key={editingFlow.id}
+            heading="Edit workflow"
+            initial={flowEditsOf(editingFlow)}
+            cancelLabel="Cancel"
+            confirmCancel={false}
+            onHoverStep={hoverStep}
+            onSave={(edits) => {
+              void updateDraft(projectId, editingFlow.id, flowPatch(editingFlow, edits));
+              setEditingFlow(null);
+            }}
+            onCancel={() => setEditingFlow(null)}
+          />
+        </div>
+      </div>
+    );
+  }
   const groups = groupDrafts(drafts, context.path);
   const canSend = auth.state !== null && auth.state.configured && auth.state.signedIn;
 
@@ -273,8 +332,9 @@ export function App() {
             <div className="list-heading">
               {drafts.length > 0 && (
                 <Checkbox
-                  checked={chosen.length === drafts.length}
-                  mixed={chosen.length > 0 && chosen.length < drafts.length}
+                  checked={sendable.length > 0 && chosen.length === sendable.length}
+                  mixed={chosen.length > 0 && chosen.length < sendable.length}
+                  disabled={sendable.length === 0}
                   label="Include all drafts in send"
                   onChange={includeAll}
                 />
@@ -301,6 +361,7 @@ export function App() {
                         ? () => send({ type: 'focus-item', id: item.id })
                         : undefined
                     }
+                    onEditFlow={item.kind === 'flow' ? () => setEditingFlow(item) : undefined}
                     onSave={(comment) => void updateDraft(projectId, item.id, { comment })}
                     onDelete={() => void removeDraft(projectId, item.id)}
                   />

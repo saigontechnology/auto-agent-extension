@@ -94,3 +94,77 @@ test('the panel lists steps live, takes notes, pauses and stops', async ({ conte
   await expect(page.getByRole('status')).toHaveCount(0);
   await expect.poll(async () => (await storedRecording(worker))?.status).toBe('stopped');
 });
+
+test('a stopped recording is reviewed, saved as a draft and sent', async ({ context, worker, extensionId }) => {
+  const { page, panel } = await openReview(context, worker, extensionId, 'flow.html');
+  await panel.getByRole('button', { name: 'Record workflow' }).click();
+  await page.locator('#email').fill('ada@example.com');
+  await page.locator('#submit').click();
+  await expect(page).toHaveTitle('status 500');
+  const bar = panel.getByRole('region', { name: 'Recording' });
+  await expect(bar.getByText('POST /api/login → 500')).toBeVisible();
+  await bar.getByRole('button', { name: 'Stop' }).click();
+
+  const review = panel.getByRole('form', { name: 'Review workflow' });
+  await expect(review.getByRole('button', { name: 'Save draft' })).toBeDisabled();
+  await review.getByLabel('Title').fill('Sign-in fails');
+  await review.getByLabel('Expected').fill('I land on the dashboard');
+  await review.getByLabel('Actual').fill('Nothing happens');
+  const failing = review.getByRole('listitem').filter({ hasText: 'POST /api/login → 500' });
+  await failing.getByRole('button', { name: 'Mark as failing step' }).click();
+  await expect(failing.getByText('Fails here')).toBeVisible();
+  await review.getByRole('listitem').filter({ hasText: 'Click button "Sign in"' }).getByRole('button', { name: 'Delete step' }).click();
+  await review.getByRole('button', { name: 'Save draft' }).click();
+
+  const drafts = panel.getByRole('region', { name: 'Drafts' });
+  await expect(drafts.getByText('Sign-in fails')).toBeVisible();
+  await expect(drafts.getByText('2 steps · 1 error')).toBeVisible();
+  expect(await storedRecording(worker)).toBeNull();
+
+  await panel.getByRole('button', { name: 'Send 1 draft' }).click();
+  await expect(panel.getByRole('region', { name: 'Sent' }).getByText('Sign-in fails')).toBeVisible();
+  const sent = await worker.evaluate(async () => {
+    const { feedback } = await chrome.storage.local.get('feedback');
+    return (feedback as Record<string, Array<Record<string, any>>>)['demo-project']?.[0];
+  });
+  expect(sent).toMatchObject({ kind: 'flow', comment: 'Sign-in fails', flow: { expected: 'I land on the dashboard' } });
+  expect(sent?.flow.steps.map((step: { type: string }) => step.type)).toEqual(['input', 'network']);
+  expect(sent?.flow.failedStepId).toBe(sent?.flow.steps[1].id);
+});
+
+test('discarding asks first; closing the tab keeps an untitled draft that cannot be sent', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  const first = await openReview(context, worker, extensionId, 'flow.html');
+  await first.panel.getByRole('button', { name: 'Record workflow' }).click();
+  await first.page.locator('#email').fill('first');
+  await first.panel.getByRole('button', { name: 'Stop' }).click();
+  const review = first.panel.getByRole('form', { name: 'Review workflow' });
+  await review.getByRole('button', { name: 'Discard' }).click();
+  await review.getByRole('button', { name: 'Keep' }).click();
+  await review.getByRole('button', { name: 'Discard' }).click();
+  await review.getByRole('button', { name: 'Discard' }).click();
+  await expect(review).toHaveCount(0);
+  await expect(first.panel.getByRole('heading', { name: 'Drafts (0)' })).toBeVisible();
+
+  await first.panel.getByRole('button', { name: 'Record workflow' }).click();
+  await first.page.locator('#email').fill('ada@example.com');
+  await expect.poll(async () => (await storedRecording(worker))?.steps.length).toBe(1);
+  await first.page.close();
+
+  const second = await openReview(context, worker, extensionId, 'flow.html');
+  const drafts = second.panel.getByRole('region', { name: 'Drafts' });
+  await expect(drafts.getByText('Untitled workflow')).toBeVisible();
+  await expect(drafts.getByText('Add a title to send')).toBeVisible();
+  await expect(drafts.getByRole('checkbox', { name: 'Include in send' })).toBeDisabled();
+  await expect(second.panel.getByRole('button', { name: 'Send drafts' })).toBeDisabled();
+
+  await drafts.getByRole('button', { name: 'Edit' }).click();
+  const edit = second.panel.getByRole('form', { name: 'Review workflow' });
+  await edit.getByLabel('Title').fill('Email field loses focus');
+  await edit.getByRole('button', { name: 'Save draft' }).click();
+  await expect(drafts.getByText('Email field loses focus')).toBeVisible();
+  await expect(second.panel.getByRole('button', { name: 'Send 1 draft' })).toBeEnabled();
+});

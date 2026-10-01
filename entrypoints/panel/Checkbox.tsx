@@ -5,10 +5,11 @@ type Props = {
   /** Shown as a dash: some, but not all, of what this box stands for is checked. */
   mixed?: boolean;
   label: string;
+  disabled?: boolean;
   onChange: (checked: boolean) => void;
 };
 
-export function Checkbox({ checked, mixed = false, label, onChange }: Props) {
+export function Checkbox({ checked, mixed = false, label, disabled = false, onChange }: Props) {
   const ref = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -21,6 +22,7 @@ export function Checkbox({ checked, mixed = false, label, onChange }: Props) {
       type="checkbox"
       className="check"
       checked={checked}
+      disabled={disabled}
       aria-label={label}
       title={label}
       onChange={(event) => onChange(event.target.checked)}

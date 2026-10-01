@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { TextChange } from '@/components/TextChange';
+import { isSendable } from '@/lib/flow/flow-item';
+import { flowSummary } from '@/lib/flow/step-label';
 import type { FeedbackItem } from '@/lib/types';
 import { Checkbox } from './Checkbox';
 import { IconButton } from './icons';
@@ -13,6 +15,7 @@ type Props = {
   included: boolean;
   onInclude: (included: boolean) => void;
   onFocus?: () => void;
+  onEditFlow?: () => void;
   onSave: (comment: string) => void;
   onDelete: () => void;
 };
@@ -24,22 +27,40 @@ export function DraftRow({
   included,
   onInclude,
   onFocus,
+  onEditFlow,
   onSave,
   onDelete,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [comment, setComment] = useState(item.comment);
   const canSave = item.kind === 'text-edit' || comment.trim() !== '';
+  const flow = item.kind === 'flow' ? item.flow : undefined;
+  const sendable = isSendable(item);
 
   return (
-    <li className={included ? 'row row--draft' : 'row row--draft row--excluded'}>
-      <Checkbox checked={included} label="Include in send" onChange={onInclude} />
+    <li className={included && sendable ? 'row row--draft' : 'row row--draft row--excluded'}>
+      <Checkbox
+        checked={included && sendable}
+        disabled={!sendable}
+        label="Include in send"
+        onChange={onInclude}
+      />
       <button type="button" className="row__main" onClick={onFocus} disabled={!onFocus}>
         <span className={number === undefined ? 'badge badge--blank' : 'badge'}>{number}</span>
         <span className="row__body">
-          {item.textEdit && <TextChange className="row__edit" {...item.textEdit} />}
-          {!editing && item.comment && <span className="row__comment">{item.comment}</span>}
-          {missing && <span className="row__warning">element not found</span>}
+          {flow ? (
+            <>
+              <span className="row__comment">{item.comment || <em>Untitled workflow</em>}</span>
+              <span className="row__meta">{flowSummary(flow.steps)}</span>
+              {!sendable && <span className="row__warning">Add a title to send</span>}
+            </>
+          ) : (
+            <>
+              {item.textEdit && <TextChange className="row__edit" {...item.textEdit} />}
+              {!editing && item.comment && <span className="row__comment">{item.comment}</span>}
+              {missing && <span className="row__warning">element not found</span>}
+            </>
+          )}
         </span>
       </button>
 
@@ -49,6 +70,10 @@ export function DraftRow({
             icon="edit"
             label="Edit"
             onClick={() => {
+              if (flow) {
+                onEditFlow?.();
+                return;
+              }
               setComment(item.comment);
               setEditing(true);
             }}
