@@ -26,7 +26,7 @@ Vibe Feedback is a Chrome extension that replaces that step. A reviewer opens th
 
 ### Out of scope for v1
 
-Screenshots, multi-step flow recording, realtime updates, replies and threads, resolving items from the extension, custom domains beyond Firebase Hosting, a global keyboard shortcut, Firefox.
+Screenshots, multi-step flow recording (now designed in `2026-10-01-workflow-recording-design.md`), realtime updates, replies and threads, resolving items from the extension, custom domains beyond Firebase Hosting, a global keyboard shortcut, Firefox.
 
 ## 3. Contract with the tool
 
