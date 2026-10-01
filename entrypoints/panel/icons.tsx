@@ -7,6 +7,8 @@ const PATHS = {
   delete: ['M4 7h16', 'M9 7V4h6v3', 'M6 7l1 13h10l1-13', 'M10 11v5', 'M14 11v5'],
   resolve: ['M5 12.5l4.5 4.5L19 7'],
   reopen: ['M4 4v5h5', 'M4.6 9A8 8 0 1 1 4 13'],
+  flag: ['M6 21V4', 'M6 4h12l-3 4.5L18 13H6'],
+  goto: ['M4 12h14', 'M13 6l6 6-6 6'],
   external: ['M14 4h6v6', 'M20 4l-8 8', 'M17 14v6H4V7h6'],
 } as const;
 

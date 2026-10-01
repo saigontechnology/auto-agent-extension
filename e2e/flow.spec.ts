@@ -61,8 +61,36 @@ test('picking stays off while recording', async ({ context, worker, extensionId 
   await panel.getByRole('button', { name: 'Record workflow' }).click();
   await expect(page.getByRole('status')).toContainText('REC');
 
-  await panel.getByRole('button', { name: 'Select', exact: true }).click();
-  await expect(panel.getByRole('button', { name: 'Off', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(panel.getByRole('group', { name: 'Mode' })).toHaveCount(0);
   await page.locator('#email').fill('x');
   await expect.poll(() => storedTypes(worker)).toContain('input');
+});
+
+test('the panel lists steps live, takes notes, pauses and stops', async ({ context, worker, extensionId }) => {
+  const { page, panel } = await openReview(context, worker, extensionId, 'flow.html');
+  await panel.getByRole('button', { name: 'Record workflow' }).click();
+  const bar = panel.getByRole('region', { name: 'Recording' });
+  await expect(bar).toBeVisible();
+
+  await page.locator('#email').fill('ada@example.com');
+  await expect(bar.getByText('Type "ada@example.com" into input "Email"')).toBeVisible();
+  await expect(bar.getByText('src/pages/Login.tsx:31')).toBeVisible();
+
+  await bar.getByRole('button', { name: 'Note' }).click();
+  await bar.getByRole('textbox', { name: 'Note' }).fill('Looks slow');
+  await bar.getByRole('button', { name: 'Add note' }).click();
+  await expect(bar.getByText('Note: Looks slow')).toBeVisible();
+
+  await bar.getByRole('button', { name: 'Pause' }).click();
+  await expect(page.getByRole('status')).toContainText('Paused');
+  await page.locator('#password').fill('hunter2');
+  await bar.getByRole('button', { name: 'Resume' }).click();
+  await expect(page.getByRole('status')).toContainText('REC');
+  await expect(bar.getByText(/hunter2/)).toHaveCount(0);
+  await expect(bar).toContainText('2 steps');
+
+  await bar.getByRole('button', { name: 'Stop' }).click();
+  await expect(bar).toHaveCount(0);
+  await expect(page.getByRole('status')).toHaveCount(0);
+  await expect.poll(async () => (await storedRecording(worker))?.status).toBe('stopped');
 });

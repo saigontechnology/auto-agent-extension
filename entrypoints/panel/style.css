@@ -585,3 +585,164 @@ h2 {
   padding: 9px;
   font-size: 15px;
 }
+
+/* Recording */
+
+.recording {
+  margin-top: 14px;
+}
+
+.recording__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.recording__dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  background: #e5484d;
+  border-radius: 50%;
+  animation: recording-pulse 1.4s ease-in-out infinite;
+}
+
+.recording__dot--paused {
+  background: var(--faint);
+  animation: none;
+}
+
+@keyframes recording-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recording__dot {
+    animation: none;
+  }
+}
+
+.recording__stats {
+  flex: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.recording__buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.recording__note {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.recording__note input,
+.step__editor input,
+.field input {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 9px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+/* Steps */
+
+.steps {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.steps--live {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  column-gap: 8px;
+  align-items: start;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.step__number {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+  text-align: right;
+  padding-top: 1px;
+}
+
+.step__body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.step__text {
+  overflow-wrap: anywhere;
+}
+
+.step__source {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.step--error .step__text {
+  color: var(--danger);
+}
+
+.step--warning .step__text {
+  color: #b54708;
+}
+
+.step--note .step__text {
+  font-style: italic;
+}
+
+.step--failed {
+  background: var(--wash);
+}
+
+.step__flag {
+  align-self: start;
+  margin-top: 2px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-deep);
+  background: var(--green);
+  border-radius: 4px;
+}
+
+.step__tools {
+  display: flex;
+  gap: 2px;
+}
+
+.step__editor {
+  grid-column: 2 / -1;
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .step--warning .step__text {
+    color: #fdb022;
+  }
+}

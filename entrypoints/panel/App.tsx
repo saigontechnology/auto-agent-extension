@@ -7,10 +7,13 @@ import { clientInfo } from '@/lib/client-info';
 import { LOCAL_ONLY } from '@/lib/config';
 import { removeDraft, updateDraft } from '@/lib/draft-store';
 import { setFeedbackStatus } from '@/lib/feedback-store';
+import type { FlowRequest } from '@/lib/messages';
 import { groupDrafts, pagePins } from '@/lib/pins';
 import type { Mode } from '@/lib/types';
 import { Checkbox } from './Checkbox';
 import { DraftRow } from './DraftRow';
+import { RecordingBar } from './RecordingBar';
+import { useRecording } from './flow-hooks';
 import { SentRow } from './SentRow';
 import {
   type ConnectionStatus,
@@ -55,6 +58,15 @@ export function App() {
   const drafts = useDrafts(context?.projectId);
   const auth = useAuth();
   const sent = useSent(context, send);
+  const recording = useRecording(tabId);
+  const recordingActive = recording?.status === 'recording' || recording?.status === 'paused';
+  const [flowError, setFlowError] = useState<string | null>(null);
+  const flowRequest = (request: FlowRequest) => {
+    setFlowError(null);
+    void sendToBackground(request).then((result) => {
+      if (!result.ok) setFlowError(result.error);
+    });
+  };
 
   // Every draft goes into the next Send unless the reviewer unticks it, so only the drafts
   // left out are remembered and a new draft starts ticked.
@@ -194,52 +206,66 @@ export function App() {
           </p>
         )}
 
-        <div className="toolbar">
-          <div className="segmented" role="group" aria-label="Mode">
-            {MODES.map((option) => (
-              <button
-                key={option.mode}
-                type="button"
-                aria-pressed={mode === option.mode}
-                onClick={() => setMode(option.mode)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-          <div className="toolbar__actions">
-            <button type="button" onClick={() => setPageComment('')}>
-              Add page comment
-            </button>
-            <button type="button" onClick={startRecording}>
-              Record workflow
-            </button>
-          </div>
-        </div>
+        {flowError && <p className="error">{flowError}</p>}
 
-        {pageComment !== null && (
-          <form
-            className="page-comment"
-            onSubmit={(event) => {
-              event.preventDefault();
-              addPageComment();
-            }}
-          >
-            <textarea
-              autoFocus
-              placeholder="Comment about this page as a whole"
-              value={pageComment}
-              onChange={(event) => setPageComment(event.target.value)}
-            />
-            <div className="row__actions">
-              <button type="button" onClick={() => setPageComment(null)}>
-                Cancel
-              </button>
-              <button type="submit" className="primary" disabled={pageComment.trim() === ''}>
-                Add
-              </button>
+        {recordingActive && recording ? (
+          <RecordingBar
+            recording={recording}
+            onPause={() => flowRequest({ type: 'flow-pause', tabId: recording.tabId })}
+            onResume={() => flowRequest({ type: 'flow-resume', tabId: recording.tabId })}
+            onStop={() => flowRequest({ type: 'flow-stop', tabId: recording.tabId })}
+            onNote={(text) => flowRequest({ type: 'flow-note', tabId: recording.tabId, text, path: context.path })}
+          />
+        ) : (
+          <>
+            <div className="toolbar">
+              <div className="segmented" role="group" aria-label="Mode">
+                {MODES.map((option) => (
+                  <button
+                    key={option.mode}
+                    type="button"
+                    aria-pressed={mode === option.mode}
+                    onClick={() => setMode(option.mode)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <div className="toolbar__actions">
+                <button type="button" onClick={() => setPageComment('')}>
+                  Add page comment
+                </button>
+                <button type="button" onClick={startRecording}>
+                  Record workflow
+                </button>
+              </div>
             </div>
-          </form>
+
+            {pageComment !== null && (
+              <form
+                className="page-comment"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  addPageComment();
+                }}
+              >
+                <textarea
+                  autoFocus
+                  placeholder="Comment about this page as a whole"
+                  value={pageComment}
+                  onChange={(event) => setPageComment(event.target.value)}
+                />
+                <div className="row__actions">
+                  <button type="button" onClick={() => setPageComment(null)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="primary" disabled={pageComment.trim() === ''}>
+                    Add
+                  </button>
+                </div>
+              </form>
+            )}
+          </>
         )}
 
         <main className="lists">
