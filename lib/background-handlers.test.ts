@@ -8,7 +8,7 @@ import { listFeedback } from './feedback-store';
 import { isBackgroundRequest } from './messages';
 import { DEFAULT_SETTINGS } from './settings-store';
 import { makeItem } from './test-helpers';
-import type { Settings } from './types';
+import type { FeedbackItem, Settings } from './types';
 
 const real: Settings = {
   useMock: false,
@@ -50,17 +50,53 @@ describe('handleRequest', () => {
     await addDraft('p1', makeItem({ id: 'b' }));
     await addDraft('p2', makeItem({ id: 'other' }));
 
-    const result = await handleRequest({ type: 'submit', projectId: 'p1' }, makeDeps());
+    const result = await handleRequest(
+      { type: 'submit', projectId: 'p1', ids: ['a', 'b'] },
+      makeDeps(),
+    );
 
     expect(result).toMatchObject({ ok: true, value: [{ id: 'a' }, { id: 'b' }] });
     expect(await listDrafts('p1')).toEqual([]);
     expect((await listDrafts('p2')).map((d) => d.id)).toEqual(['other']);
   });
 
+  it('sends only the chosen drafts and keeps the others', async () => {
+    await addDraft('p1', makeItem({ id: 'a' }));
+    await addDraft('p1', makeItem({ id: 'b' }));
+    await addDraft('p1', makeItem({ id: 'c' }));
+    const api: FeedbackApi = {
+      submit: vi.fn(async (_projectId: string, items: FeedbackItem[]) =>
+        items.map((item) => ({ ...item, author: { id: 'u', name: 'U' }, status: 'open' as const })),
+      ),
+    };
+
+    const result = await handleRequest(
+      { type: 'submit', projectId: 'p1', ids: ['a', 'c', 'gone'] },
+      makeDeps({ createApi: () => api }),
+    );
+
+    expect(result).toMatchObject({ ok: true, value: [{ id: 'a' }, { id: 'c' }] });
+    expect(vi.mocked(api.submit).mock.calls[0]![1].map((item: { id: string }) => item.id)).toEqual(['a', 'c']);
+    expect((await listDrafts('p1')).map((d) => d.id)).toEqual(['b']);
+    expect((await listFeedback('p1')).map((item) => item.id)).toEqual(['a', 'c']);
+  });
+
+  it('does not call the API when nothing is chosen', async () => {
+    await addDraft('p1', makeItem({ id: 'a' }));
+    const api = { submit: vi.fn() };
+    const result = await handleRequest(
+      { type: 'submit', projectId: 'p1', ids: [] },
+      makeDeps({ createApi: () => api }),
+    );
+    expect(result).toEqual({ ok: true, value: [] });
+    expect(api.submit).not.toHaveBeenCalled();
+    expect(await listDrafts('p1')).toHaveLength(1);
+  });
+
   it('does not call the API when there is nothing to send', async () => {
     const api = { submit: vi.fn() };
     const result = await handleRequest(
-      { type: 'submit', projectId: 'p1' },
+      { type: 'submit', projectId: 'p1', ids: ['a'] },
       makeDeps({ createApi: () => api }),
     );
     expect(result).toEqual({ ok: true, value: [] });
@@ -70,7 +106,7 @@ describe('handleRequest', () => {
   it('keeps the drafts when the submit fails', async () => {
     await addDraft('p1', makeItem({ id: 'a' }));
     const result = await handleRequest(
-      { type: 'submit', projectId: 'p1' },
+      { type: 'submit', projectId: 'p1', ids: ['a'] },
       makeDeps({ createApi: () => failingApi(new ApiError('Request failed (500)', 500)) }),
     );
     expect(result).toEqual({ ok: false, code: 'failed', error: 'Request failed (500)' });
@@ -85,20 +121,20 @@ describe('handleRequest', () => {
         return items.map((item) => ({ ...item, author: { id: 'u', name: 'U' }, status: 'open' }));
       },
     };
-    await handleRequest({ type: 'submit', projectId: 'p1' }, makeDeps({ createApi: () => api }));
+    await handleRequest({ type: 'submit', projectId: 'p1', ids: ['a'] }, makeDeps({ createApi: () => api }));
     expect((await listDrafts('p1')).map((d) => d.id)).toEqual(['late']);
   });
 
   it('keeps what was sent in the local feedback store as open', async () => {
     await addDraft('p1', makeItem({ id: 'a' }));
-    await handleRequest({ type: 'submit', projectId: 'p1' }, makeDeps());
+    await handleRequest({ type: 'submit', projectId: 'p1', ids: ['a'] }, makeDeps());
     expect(await listFeedback('p1')).toMatchObject([{ id: 'a', status: 'open' }]);
   });
 
   it('stores nothing when the submit fails', async () => {
     await addDraft('p1', makeItem({ id: 'a' }));
     await handleRequest(
-      { type: 'submit', projectId: 'p1' },
+      { type: 'submit', projectId: 'p1', ids: ['a'] },
       makeDeps({ createApi: () => failingApi(new ApiError('Request failed (500)', 500)) }),
     );
     expect(await listFeedback('p1')).toEqual([]);
@@ -107,7 +143,7 @@ describe('handleRequest', () => {
   it('reports unauthorized distinctly', async () => {
     await addDraft('p1', makeItem({ id: 'a' }));
     const result = await handleRequest(
-      { type: 'submit', projectId: 'p1' },
+      { type: 'submit', projectId: 'p1', ids: ['a'] },
       makeDeps({ createApi: () => failingApi(new UnauthorizedError()) }),
     );
     expect(result).toEqual({ ok: false, code: 'unauthorized', error: 'Sign in to continue' });
@@ -116,7 +152,7 @@ describe('handleRequest', () => {
   it('refuses API calls when the real API is not configured', async () => {
     const createApi = vi.fn();
     const result = await handleRequest(
-      { type: 'submit', projectId: 'p1' },
+      { type: 'submit', projectId: 'p1', ids: ['a'] },
       makeDeps({ getSettings: async () => ({ ...DEFAULT_SETTINGS, useMock: false }), createApi }),
     );
     expect(result).toMatchObject({ ok: false, code: 'not-configured' });
@@ -180,7 +216,7 @@ describe('handleRequest', () => {
 
 describe('isBackgroundRequest', () => {
   it('accepts known request types only', () => {
-    expect(isBackgroundRequest({ type: 'submit', projectId: 'p' })).toBe(true);
+    expect(isBackgroundRequest({ type: 'submit', projectId: 'p', ids: [] })).toBe(true);
     expect(isBackgroundRequest({ type: 'content-ready' })).toBe(false);
     expect(isBackgroundRequest(null)).toBe(false);
     expect(isBackgroundRequest('submit')).toBe(false);

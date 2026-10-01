@@ -2,6 +2,7 @@ import './style.css';
 import { createRoot } from 'react-dom/client';
 import { createShadowRootUi, defineContentScript } from '#imports';
 import { App } from '@/components/App';
+import { keepInTopLayer } from '@/lib/top-layer';
 
 export default defineContentScript({
   // Every web page, while REQUIRE_PREVIEW_MARKERS is off. The UI stays idle until the side
@@ -18,6 +19,7 @@ export default defineContentScript({
       // Keep typing in the comment box from triggering the page's keyboard shortcuts.
       isolateEvents: ['keydown', 'keyup', 'keypress'],
       onMount(container, _shadow, host) {
+        ctx.onInvalidated(keepInTopLayer(host));
         const mount = document.createElement('div');
         container.append(mount);
         const root = createRoot(mount);

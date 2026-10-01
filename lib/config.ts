@@ -11,7 +11,7 @@
 export const REQUIRE_PREVIEW_MARKERS: boolean = false;
 
 /**
- * When true, feedback is always stored in this browser: the side panel hides API settings
+ * When true, feedback is always stored in this browser: the review panel hides API settings
  * and sign-in, and the background ignores any saved API settings.
  */
 export const LOCAL_ONLY: boolean = true;

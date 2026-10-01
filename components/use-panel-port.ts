@@ -3,7 +3,7 @@ import { type Browser, browser } from 'wxt/browser';
 import { type ContentToPanel, PANEL_PORT, type PanelToContent } from '@/lib/messages';
 
 /**
- * Accepts the side panel's connection. The page UI is only active while a panel is
+ * Accepts the review panel's connection. The page UI is only active while a panel is
  * connected, so closing the panel hides pins and turns picking off.
  */
 export function usePanelPort(onMessage: (message: PanelToContent) => void) {
@@ -21,7 +21,7 @@ export function usePanelPort(onMessage: (message: PanelToContent) => void) {
       setPort(incoming);
     };
     browser.runtime.onConnect.addListener(onConnect);
-    // Tell an already-open side panel that this page is ready to be connected to.
+    // Tell an already-open review panel that this page is ready to be connected to.
     const announce = () => {
       browser.runtime.sendMessage({ type: 'content-ready' }).catch(() => undefined);
     };

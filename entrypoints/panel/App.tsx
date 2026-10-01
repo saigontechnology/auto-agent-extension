@@ -9,6 +9,7 @@ import { removeDraft, updateDraft } from '@/lib/draft-store';
 import { setFeedbackStatus } from '@/lib/feedback-store';
 import { groupDrafts, pagePins } from '@/lib/pins';
 import type { Mode } from '@/lib/types';
+import { Checkbox } from './Checkbox';
 import { DraftRow } from './DraftRow';
 import { SentRow } from './SentRow';
 import {
@@ -19,6 +20,9 @@ import {
   useSent,
   useTargetTab,
 } from './hooks';
+
+/** True when the panel runs inside the floating window the content script puts on the page. */
+const EMBEDDED = window.top !== window;
 
 const MODES: Array<{ mode: Mode; label: string }> = [
   { mode: 'off', label: 'Off' },
@@ -52,6 +56,23 @@ export function App() {
   const auth = useAuth();
   const sent = useSent(context, send);
 
+  // Every draft goes into the next Send unless the reviewer unticks it, so only the drafts
+  // left out are remembered and a new draft starts ticked.
+  const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set());
+  const projectKey = context?.projectId;
+  useEffect(() => setExcluded(new Set()), [projectKey]);
+  const chosen = useMemo(() => drafts.filter((draft) => !excluded.has(draft.id)), [drafts, excluded]);
+
+  const include = (id: string, included: boolean) =>
+    setExcluded((current) => {
+      const next = new Set(current);
+      if (included) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const includeAll = (included: boolean) =>
+    setExcluded(included ? new Set() : new Set(drafts.map((draft) => draft.id)));
+
   const [pageComment, setPageComment] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -81,24 +102,29 @@ export function App() {
 
   const openOptions = () => void browser.runtime.openOptionsPage();
 
-  const header = (
+  const accountActions = !LOCAL_ONLY && (
+    <div className="header__actions">
+      {auth.state && !auth.state.useMock && auth.state.configured && (
+        <button type="button" onClick={auth.state.signedIn ? auth.signOut : auth.signIn}>
+          {auth.state.signedIn ? 'Sign out' : 'Sign in'}
+        </button>
+      )}
+      {auth.state?.useMock && <span className="tag">Mock</span>}
+      <button type="button" onClick={openOptions}>
+        Options
+      </button>
+    </div>
+  );
+
+  // Inside the floating window the page draws the title bar, so only the account actions remain.
+  const header = EMBEDDED ? (
+    accountActions && <header className="header header--embedded">{accountActions}</header>
+  ) : (
     <header className="header">
       <div className="header__brand">
         <BrandMark className="header__mark" />
         <h1>Auto Agent</h1>
-        {!LOCAL_ONLY && (
-          <div className="header__actions">
-            {auth.state && !auth.state.useMock && auth.state.configured && (
-              <button type="button" onClick={auth.state.signedIn ? auth.signOut : auth.signIn}>
-                {auth.state.signedIn ? 'Sign out' : 'Sign in'}
-              </button>
-            )}
-            {auth.state?.useMock && <span className="tag">Mock</span>}
-            <button type="button" onClick={openOptions}>
-              Options
-            </button>
-          </div>
-        )}
+        {accountActions}
       </div>
     </header>
   );
@@ -121,7 +147,11 @@ export function App() {
   const submit = async () => {
     setSending(true);
     setSendError(null);
-    const result = await sendToBackground({ type: 'submit', projectId });
+    const result = await sendToBackground({
+      type: 'submit',
+      projectId,
+      ids: chosen.map((draft) => draft.id),
+    });
     setSending(false);
     if (!result.ok) setSendError(result.error);
   };
@@ -130,7 +160,7 @@ export function App() {
   const exportDrafts = () => {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     const name = projectId.replace(/[^\w.-]+/g, '-');
-    downloadJson(`auto-agent-feedback-${name}-${stamp}.json`, feedbackPayload(drafts, clientInfo()));
+    downloadJson(`auto-agent-feedback-${name}-${stamp}.json`, feedbackPayload(chosen, clientInfo()));
   };
 
   const addPageComment = () => {
@@ -141,9 +171,9 @@ export function App() {
   };
 
   const sendLabel =
-    drafts.length === 0
+    chosen.length === 0
       ? 'Send drafts'
-      : `Send ${drafts.length} ${drafts.length === 1 ? 'draft' : 'drafts'}`;
+      : `Send ${chosen.length} ${chosen.length === 1 ? 'draft' : 'drafts'}`;
 
   return (
     <div className="panel">
@@ -204,7 +234,17 @@ export function App() {
 
         <main className="lists">
           <section aria-label="Drafts">
-            <h2>Drafts ({drafts.length})</h2>
+            <div className="list-heading">
+              {drafts.length > 0 && (
+                <Checkbox
+                  checked={chosen.length === drafts.length}
+                  mixed={chosen.length > 0 && chosen.length < drafts.length}
+                  label="Include all drafts in send"
+                  onChange={includeAll}
+                />
+              )}
+              <h2>Drafts ({drafts.length})</h2>
+            </div>
             {drafts.length === 0 && (
               <p className="empty">
                 No drafts yet. Choose Select or Text above, then click something on the page.
@@ -218,6 +258,8 @@ export function App() {
                     item={item}
                     number={numbers.get(item.id)}
                     missing={missing.has(item.id)}
+                    included={!excluded.has(item.id)}
+                    onInclude={(included) => include(item.id, included)}
                     onFocus={
                       numbers.has(item.id)
                         ? () => send({ type: 'focus-item', id: item.id })
@@ -270,13 +312,13 @@ export function App() {
           <p className="muted">Sign in to send your drafts.</p>
         )}
         <div className="footer__buttons">
-          <button type="button" disabled={drafts.length === 0} onClick={exportDrafts}>
+          <button type="button" disabled={chosen.length === 0} onClick={exportDrafts}>
             Export JSON
           </button>
           <button
             type="button"
             className="primary footer__send"
-            disabled={!canSend || sending || drafts.length === 0}
+            disabled={!canSend || sending || chosen.length === 0}
             onClick={() => void submit()}
           >
             {sending ? 'Sending…' : sendLabel}

@@ -9,7 +9,7 @@ export const FIXTURE = 'http://localhost:4173/';
 /** The same fixture server under a host that is not in any allow-list. */
 export const OTHER_HOST = 'http://127.0.0.1:4173/';
 
-/** Opens a fixture page plus the side panel UI bound to that page's tab. */
+/** Opens a test page plus the review panel, as its own page, bound to that page's tab. */
 export async function openReview(
   context: BrowserContext,
   worker: Worker,
@@ -26,11 +26,11 @@ export async function openReview(
   expect(tabId).toBeDefined();
 
   const panel = await context.newPage();
-  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html?tabId=${tabId}`);
+  await panel.goto(`chrome-extension://${extensionId}/panel.html?tabId=${tabId}`);
   return { page, panel };
 }
 
-/** Opens the side panel UI bound to a blank tab, which no content script runs in. */
+/** Opens the review panel bound to a blank tab, which no content script runs in. */
 export async function openPanelOnBlankTab(
   context: BrowserContext,
   worker: Worker,
@@ -44,7 +44,7 @@ export async function openPanelOnBlankTab(
   );
   expect(tabId).toBeDefined();
   const panel = await context.newPage();
-  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html?tabId=${tabId}`);
+  await panel.goto(`chrome-extension://${extensionId}/panel.html?tabId=${tabId}`);
   return panel;
 }
 

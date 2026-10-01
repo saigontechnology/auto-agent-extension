@@ -1,16 +1,57 @@
-import { browser, defineBackground } from '#imports';
+import { browser, defineBackground, storage } from '#imports';
 import { createHttpFeedbackApi } from '@/lib/api/http-feedback-api';
 import { createMockFeedbackApi } from '@/lib/api/mock-feedback-api';
 import { type OAuthDeps, getAccessToken, isSignedIn, signIn, signOut } from '@/lib/auth/oauth';
 import { type HandlerDeps, handleRequest } from '@/lib/background-handlers';
 import { clientInfo } from '@/lib/client-info';
-import { isBackgroundRequest } from '@/lib/messages';
+import { type SetPanel, isBackgroundRequest, isPanelState } from '@/lib/messages';
 import { LOCAL_ONLY } from '@/lib/config';
 import { DEFAULT_SETTINGS, getSettings } from '@/lib/settings-store';
 import type { Settings } from '@/lib/types';
 
 export default defineBackground(() => {
-  browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(console.error);
+  // The review panel floats over the page instead of docking beside it, so the page keeps its
+  // full width. The toolbar icon opens and closes it; which tabs have it open is kept here so
+  // it comes back after a reload or a navigation.
+  const openPanels = storage.defineItem<number[]>('session:open-panels', { fallback: [] });
+
+  // Serialised so a click and a message arriving together cannot overwrite each other.
+  let panelQueue: Promise<unknown> = Promise.resolve();
+  const setPanelOpen = (tabId: number, open: boolean): Promise<void> => {
+    const run = panelQueue.then(async () => {
+      const tabs = (await openPanels.getValue()).filter((id) => id !== tabId);
+      await openPanels.setValue(open ? [...tabs, tabId] : tabs);
+    });
+    panelQueue = run.catch(() => undefined);
+    return run;
+  };
+
+  browser.tabs.onRemoved.addListener((tabId) => void setPanelOpen(tabId, false));
+
+  browser.action.onClicked.addListener(async (tab) => {
+    if (tab.id === undefined) return;
+    const open = !(await openPanels.getValue()).includes(tab.id);
+    await setPanelOpen(tab.id, open);
+    const message: SetPanel = { type: 'set-panel', open };
+    try {
+      await browser.tabs.sendMessage(tab.id, message);
+      return;
+    } catch {
+      // No content script yet: the tab was open before the extension was installed or reloaded.
+    }
+    try {
+      // The injected script reads the open state itself when it starts.
+      await browser.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['/content-scripts/content.js'],
+      });
+    } catch {
+      // Pages such as chrome:// and the Web Store do not allow extensions to run.
+      await setPanelOpen(tab.id, false);
+      await browser.action.setBadgeText({ tabId: tab.id, text: '!' });
+      await browser.action.setTitle({ tabId: tab.id, title: 'Auto Agent cannot run on this page' });
+    }
+  });
 
   const oauthDeps = (settings: Settings): OAuthDeps => ({
     settings: settings.oauth,
@@ -38,7 +79,16 @@ export default defineBackground(() => {
     isSignedIn,
   };
 
-  browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (isPanelState(message)) {
+      const tabId = sender.tab?.id;
+      if (tabId === undefined) return;
+      const update = message.open === undefined ? Promise.resolve() : setPanelOpen(tabId, message.open);
+      update
+        .then(() => openPanels.getValue())
+        .then((tabs) => sendResponse(tabs.includes(tabId)));
+      return true;
+    }
     if (!isBackgroundRequest(message)) return;
     handleRequest(message, deps).then(sendResponse);
     return true;

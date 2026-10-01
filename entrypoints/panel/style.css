@@ -149,6 +149,10 @@ textarea {
   background: var(--ink);
 }
 
+.header--embedded {
+  padding: 8px 16px;
+}
+
 .header__brand {
   display: flex;
   align-items: center;
@@ -269,6 +273,72 @@ h2 {
   font-weight: 600;
 }
 
+/* The select-all box sits in the same column as the boxes on each draft. */
+.list-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 22px 0 4px;
+}
+
+.list-heading h2 {
+  margin: 0;
+}
+
+.list-heading .check {
+  margin: 0;
+}
+
+/*
+ * A ticked box is green like the Send button it feeds; the tick is drawn with a mitred
+ * corner like the panel's icons.
+ */
+.check {
+  flex: none;
+  display: grid;
+  place-content: center;
+  width: 16px;
+  height: 16px;
+  margin: 4px 0 0;
+  appearance: none;
+  background: var(--bg);
+  border: 1.5px solid var(--faint);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.check:hover {
+  border-color: var(--muted);
+}
+
+.check::after {
+  content: '';
+  width: 8px;
+  height: 4px;
+  border: solid var(--ink-deep);
+  border-width: 0 0 2px 2px;
+  transform: translateY(-1px) rotate(-45deg);
+  visibility: hidden;
+}
+
+.check:checked,
+.check:indeterminate {
+  background: var(--green);
+  border-color: var(--green);
+}
+
+.check:checked::after {
+  visibility: visible;
+}
+
+.check:indeterminate::after {
+  width: 8px;
+  height: 0;
+  border-width: 0 0 2px;
+  transform: none;
+  visibility: visible;
+}
+
 .row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -276,6 +346,20 @@ h2 {
   align-items: start;
   padding: 12px 0;
   border-bottom: 1px solid var(--line);
+}
+
+.row--draft {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.row--draft .row__link,
+.row--draft .row__editor {
+  grid-column: 2 / -1;
+}
+
+/* A draft left out of the next Send fades back but stays editable. */
+.row--excluded .row__body {
+  color: var(--muted);
 }
 
 .row--resolved .row__body {

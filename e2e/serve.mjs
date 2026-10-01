@@ -1,10 +1,10 @@
-// Serves fixtures/demo on http://localhost:4173 for manual checks and end-to-end tests.
+// Serves the end-to-end test pages in e2e/pages on http://localhost:4173.
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = fileURLToPath(new URL('./demo', import.meta.url));
+const root = fileURLToPath(new URL('./pages', import.meta.url));
 const port = Number(process.env.PORT ?? 4173);
 const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript' };
 
@@ -18,4 +18,4 @@ createServer((request, response) => {
   }
   response.writeHead(200, { 'Content-Type': types[extname(file)] ?? 'application/octet-stream' });
   createReadStream(file).pipe(response);
-}).listen(port, () => console.log(`Fixture at http://localhost:${port}/`));
+}).listen(port, () => console.log(`Test pages at http://localhost:${port}/`));

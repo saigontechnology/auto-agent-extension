@@ -9,7 +9,7 @@ export type Pin = {
 
 /**
  * The numbered pins for one page: anchored drafts first, then open sent items.
- * The side panel and the on-page pin layer both use this so their numbers agree.
+ * The review panel and the on-page pin layer both use this so their numbers agree.
  */
 export function pagePins(drafts: FeedbackItem[], sent: SentFeedback[], path: string): Pin[] {
   const sentIds = new Set(sent.map((item) => item.id));

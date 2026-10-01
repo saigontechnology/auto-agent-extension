@@ -6,7 +6,7 @@ export default defineConfig({
   workers: 1,
   reporter: 'list',
   webServer: {
-    command: 'node fixtures/serve.mjs',
+    command: 'node e2e/serve.mjs',
     url: 'http://localhost:4173/',
     reuseExistingServer: true,
   },

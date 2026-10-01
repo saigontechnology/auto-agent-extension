@@ -16,8 +16,9 @@ import { watchSettings } from '@/lib/settings-store';
 import type { FeedbackItem, Mode, PageContext, SentFeedback } from '@/lib/types';
 
 /**
- * The tab this panel reviews: the active tab of its window. A `?tabId=` query parameter
- * pins it to one tab, which lets the panel run as a normal page in end-to-end tests.
+ * The tab this panel reviews: the tab whose page embeds it. A `?tabId=` query parameter pins
+ * it to one tab, which lets the panel run as a normal page in end-to-end tests; opened on its
+ * own, it follows the active tab of its window.
  */
 export function useTargetTab(): number | null {
   const fixed = useMemo(() => {
@@ -28,6 +29,11 @@ export function useTargetTab(): number | null {
 
   useEffect(() => {
     if (fixed !== null) return;
+    // Embedded in a page, the panel belongs to the tab that hosts it.
+    if (window.top !== window) {
+      void browser.tabs.getCurrent().then((tab) => setTabId(tab?.id ?? null));
+      return;
+    }
     const refresh = async () => {
       const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
       setTabId(tab?.id ?? null);

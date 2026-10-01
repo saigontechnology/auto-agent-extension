@@ -4,7 +4,7 @@ import { eventElement, firstChildOf, isOwnUi, parentOf } from '@/lib/picker';
 import { HighlightBox } from './HighlightBox';
 import { usePageCursor } from './use-page-cursor';
 
-/** A key forwarded from the side panel; `at` makes repeated presses distinct. */
+/** A key forwarded from the review panel; `at` makes repeated presses distinct. */
 export type RemoteKey = { key: string; at: number };
 
 type Props = {

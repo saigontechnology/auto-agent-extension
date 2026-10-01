@@ -95,6 +95,7 @@
 
 .vf-popover {
   position: fixed;
+  z-index: 2;
   box-sizing: border-box;
   width: 320px;
   padding: 14px;
@@ -198,6 +199,135 @@
   color: #b42318;
   background: none;
   border-color: transparent;
+}
+
+/*
+ * The review panel: a window floating over the page, so the page keeps its own width. Its
+ * title bar is ink, like the company's site header; folded, the bar is all that is left.
+ */
+.vf-panel {
+  position: fixed;
+  /* Above pins and highlights, below the comment box. */
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: min(368px, calc(100vw - 16px));
+  height: min(640px, calc(100vh - 16px));
+  overflow: hidden;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 1px rgba(12, 10, 9, 0.14),
+    0 22px 48px -10px rgba(12, 10, 9, 0.4);
+}
+
+.vf-panel--minimized {
+  width: auto;
+  height: auto;
+  border-radius: 10px;
+}
+
+.vf-panel__bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 6px 0 12px;
+  color: #fafaf9;
+  background: #1c1917;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.vf-panel--dragging .vf-panel__bar {
+  cursor: grabbing;
+}
+
+.vf-panel__mark {
+  flex: none;
+  width: 14px;
+  height: 18px;
+}
+
+.vf-panel__title {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Same cut-corner tag as the pins, so a folded window still says how many drafts wait. */
+.vf-panel__count {
+  display: grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0c0a09;
+  background: #8dc63f;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 34% 100%, 0 66%);
+}
+
+.vf-panel__button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: #a6a09b;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.vf-panel__button:hover {
+  color: #fafaf9;
+  background: #292524;
+}
+
+.vf-panel__button:focus-visible {
+  outline: 2px solid #8dc63f;
+  outline-offset: -2px;
+}
+
+.vf-panel__button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: square;
+}
+
+.vf-panel__frame {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  background: inherit;
+}
+
+.vf-panel--minimized .vf-panel__frame {
+  display: none;
+}
+
+/* While moving, the frame must not swallow the pointer. */
+.vf-panel--dragging .vf-panel__frame {
+  pointer-events: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .vf-panel {
+    background: #0c0a09;
+    box-shadow:
+      0 0 0 1px #35302c,
+      0 22px 48px -10px rgba(0, 0, 0, 0.6);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

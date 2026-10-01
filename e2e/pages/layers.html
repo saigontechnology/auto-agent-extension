@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Layers</title>
+    <style>
+      body {
+        margin: 0;
+        font: 16px system-ui, sans-serif;
+      }
+      #target {
+        margin: 24px;
+      }
+      /* A page panel in the browser's top layer, like a popover-based sidebar or menu. */
+      #panel {
+        position: fixed;
+        inset: auto 0 0 0;
+        width: auto;
+        height: calc(100vh - 80px);
+        margin: 0;
+        border: 0;
+        background: transparent;
+      }
+    </style>
+  </head>
+  <body>
+    <h1 id="target">Pick me</h1>
+    <nav id="panel" popover="manual">
+      <p>Projects</p>
+      <p>Sites</p>
+    </nav>
+    <script>
+      document.getElementById('panel').showPopover();
+    </script>
+  </body>
+</html>

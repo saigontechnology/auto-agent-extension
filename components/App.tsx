@@ -5,12 +5,15 @@ import { REQUIRE_PREVIEW_MARKERS } from '@/lib/config';
 import { addDraft, listDrafts, removeDraft, updateDraft, watchDrafts } from '@/lib/draft-store';
 import { describeElement } from '@/lib/element-descriptor';
 import { createItem, currentEnv } from '@/lib/feedback-factory';
+import { type PanelState, isSetPanel } from '@/lib/messages';
 import { readPageContext } from '@/lib/page-context';
 import { type Pin, pagePins } from '@/lib/pins';
 import { findTextEditDraft, planTextEdit } from '@/lib/text-edit';
 import type { Anchor, FeedbackItem, Mode, PageContext, SentFeedback } from '@/lib/types';
+import { browser } from 'wxt/browser';
 import { CommentPopover } from './CommentPopover';
 import { HighlightBox } from './HighlightBox';
+import { PanelFrame } from './PanelFrame';
 import { Picker, type RemoteKey } from './Picker';
 import { type PinFocus, PinLayer } from './PinLayer';
 import { TextEditor, type TextEditResult } from './TextEditor';
@@ -37,6 +40,7 @@ export function App({ ctx, host }: Props) {
   const [composer, setComposer] = useState<Composer | null>(null);
   const [focus, setFocus] = useState<PinFocus | null>(null);
   const [remoteKey, setRemoteKey] = useState<RemoteKey | null>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
   const contextRef = useRef(context);
   contextRef.current = context;
 
@@ -67,6 +71,27 @@ export function App({ ctx, host }: Props) {
         break;
     }
   });
+
+  // The background knows whether this tab had the panel open before a reload or navigation,
+  // and tells the page when the toolbar icon opens or closes it.
+  useEffect(() => {
+    const ask: PanelState = { type: 'panel-state' };
+    browser.runtime
+      .sendMessage(ask)
+      .then((open: unknown) => setPanelOpen(open === true))
+      .catch(() => undefined);
+    const onMessage = (message: unknown) => {
+      if (isSetPanel(message)) setPanelOpen(message.open);
+    };
+    browser.runtime.onMessage.addListener(onMessage);
+    return () => browser.runtime.onMessage.removeListener(onMessage);
+  }, []);
+
+  const closePanel = () => {
+    setPanelOpen(false);
+    const close: PanelState = { type: 'panel-state', open: false };
+    browser.runtime.sendMessage(close).catch(() => undefined);
+  };
 
   // SPA route changes do not reload the content script, so re-read the context. The event
   // fires before the new URL is committed, so `location` is read on the next task, not now.
@@ -118,7 +143,9 @@ export function App({ ctx, host }: Props) {
     [context, drafts, sent],
   );
 
-  if (!connected || !context) return null;
+  const panel = panelOpen && <PanelFrame drafts={drafts.length} onClose={closePanel} />;
+
+  if (!connected || !context) return <div className="vf-root">{panel}</div>;
 
   const exitMode = () => {
     setMode('off');
@@ -182,6 +209,7 @@ export function App({ ctx, host }: Props) {
 
   return (
     <div className="vf-root">
+      {panel}
       <PinLayer
         pins={pins}
         focus={focus}

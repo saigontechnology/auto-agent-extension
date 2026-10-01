@@ -16,11 +16,9 @@ Design: `docs/superpowers/specs/2026-09-30-vibe-feedback-extension-design.md`
 |---|---|
 | `pnpm install && pnpm wxt prepare` | Install dependencies and generate WXT types |
 | `pnpm dev` | Run the extension in a development browser with hot reload |
-| `pnpm demo` | Build, then open Chromium with the extension loaded and the sample page open |
-| `pnpm fixture` | Serve the sample preview at http://localhost:4173/ |
 | `pnpm test` | Unit tests |
 | `pnpm compile` | Type-check |
-| `pnpm test:e2e` | Build, then run the Playwright tests against the built extension |
+| `pnpm test:e2e` | Build, then run the Playwright tests against the built extension; they serve their own pages from `e2e/pages` on port 4173 |
 | `pnpm build` | Production build in `.output/chrome-mv3` |
 
 To install a build by hand: open `chrome://extensions`, enable Developer mode, choose
@@ -35,21 +33,23 @@ The extension currently runs in a testing mode set in `lib/config.ts`:
 - `LOCAL_ONLY = true`: feedback is stored in this browser only. There is no sign-in, and the
   API settings are hidden.
 
-`pnpm demo` opens a Chromium window with the extension loaded and the sample page open.
-
 ## Look and feel
 
 The UI follows Saigon Technology's brand: green `#8dc63f` on warm ink `#1c1917`, set in Barlow
 (bundled through `@fontsource/barlow`). The logo files in `public/brand/` and the mark used
 for the extension icon in `public/icon/` come from https://saigontechnology.com/. Colours are
-defined at the top of `entrypoints/sidepanel/style.css` and `entrypoints/content/style.css`.
+defined at the top of `entrypoints/panel/style.css` and `entrypoints/content/style.css`.
 
 ## Using it
 
-1. Open a preview build and click the extension icon. The side panel opens.
+1. Open a preview build and click the extension icon. The review panel opens as a window
+   floating over the page, so the page keeps its full width. Drag its title bar to move it,
+   fold it down to a small bar with the chevron, and click the icon again to close it.
 2. Choose **Select** and click an element to comment on it, or **Text** and click a piece of
    text to rewrite it in place. **Add page comment** records feedback about the whole page.
-3. Review the drafts in the side panel, then press **Send**.
+3. Review the drafts in the panel, untick any you want to hold back, then press **Send**.
+   Only ticked drafts are sent; the others stay as drafts. Sent feedback can be resolved and
+   reopened; **Export JSON** saves the ticked drafts as the body the feedback API will receive.
 
 `Esc` leaves the current mode. In Select mode, `↑` and `↓` move to the parent or first child.
 
@@ -73,6 +73,5 @@ feedback is still stored in the browser until mock is turned off in Options.
   Change it when the real contract differs from the proposal in the design spec.
 - Turn mock off on the Options page and fill in the API base URL and the OAuth settings.
   The page shows the redirect URI to register with the tool.
-- The redirect URI contains the extension id. An unpacked extension's id depends on its
-  folder path, so add a fixed `key` to the manifest in `wxt.config.ts` before sharing the
-  extension with the team.
+- The redirect URI contains the extension id, which the `key` in `wxt.config.ts` pins to
+  `halobcdjpokedneejfmdjecjgdkejjdk` on every machine.

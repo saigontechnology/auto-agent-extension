@@ -9,9 +9,7 @@
     "zip": "wxt zip",
     "compile": "tsc --noEmit",
     "test": "vitest run",
-    "fixture": "node fixtures/serve.mjs",
     "test:e2e": "wxt build && playwright test",
-    "demo": "wxt build && node scripts/demo.mjs",
     "postinstall": "wxt prepare"
   },
   "dependencies": {

@@ -52,7 +52,9 @@ async function dispatch(request: BackgroundRequest, deps: HandlerDeps): Promise<
 
     case 'submit': {
       const api = await configuredApi(deps);
-      const drafts = await listDrafts(request.projectId);
+      // Only the drafts the reviewer chose; an id that no longer has a draft is skipped.
+      const chosen = new Set(request.ids);
+      const drafts = (await listDrafts(request.projectId)).filter((draft) => chosen.has(draft.id));
       if (drafts.length === 0) return [];
       const sent = await api.submit(request.projectId, drafts);
       // There is no API to read feedback back yet, so what was sent is kept in this browser.

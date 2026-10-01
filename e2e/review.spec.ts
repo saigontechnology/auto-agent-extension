@@ -278,3 +278,65 @@ test('sent feedback can be resolved and reopened, and stays after a reload', asy
   await sent.getByRole('button', { name: 'Reopen' }).click();
   await expect(page.locator('[data-vf-pin="sent"]')).toHaveText('1');
 });
+
+test('the comment box stays above page layers, including ones opened later', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  const { page, panel } = await openReview(context, worker, extensionId, 'layers.html');
+  await setMode(panel, 'Select');
+  await page.locator('#target').click();
+  const input = page.getByPlaceholder('Add a comment');
+  await expect(input).toBeVisible();
+
+  // The page's top-layer panel covers the lower part of the viewport, where the box opens.
+  const onTop = async () => {
+    const box = (await input.boundingBox())!;
+    return page.evaluate(
+      ([x, y]) => document.elementFromPoint(x!, y!)?.tagName.toLowerCase(),
+      [box.x + box.width / 2, box.y + box.height / 2],
+    );
+  };
+  expect(await onTop()).toBe('vibe-feedback-ui');
+
+  await page.evaluate(() => {
+    const panelEl = document.getElementById('panel')!;
+    panelEl.hidePopover();
+    panelEl.showPopover();
+  });
+  expect(await onTop()).toBe('vibe-feedback-ui');
+});
+
+test('only the ticked drafts are sent; the rest stay as drafts', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  const { page, panel } = await openReview(context, worker, extensionId);
+  await setMode(panel, 'Select');
+  await pinComment(page, '#buy', 'Bigger button');
+  await pinComment(page, '#title', 'Shorter headline');
+
+  const drafts = panel.getByRole('region', { name: 'Drafts' });
+  const boxes = drafts.getByRole('checkbox', { name: 'Include in send' });
+  const all = drafts.getByRole('checkbox', { name: 'Include all drafts in send' });
+  await expect(boxes).toHaveCount(2);
+  await expect(all).toBeChecked();
+
+  await boxes.nth(1).uncheck();
+  await expect(all).not.toBeChecked();
+  expect(await all.evaluate((box: HTMLInputElement) => box.indeterminate)).toBe(true);
+
+  await panel.getByRole('button', { name: 'Send 1 draft' }).click();
+  const sent = panel.getByRole('region', { name: 'Sent' });
+  await expect(sent.getByText('Bigger button')).toBeVisible();
+  await expect(sent.getByText('Shorter headline')).toHaveCount(0);
+  await expect(drafts.getByText('Shorter headline')).toBeVisible();
+  await expect(panel.getByRole('heading', { name: 'Drafts (1)' })).toBeVisible();
+
+  // Nothing ticked: nothing to send or export.
+  await all.uncheck();
+  await expect(panel.getByRole('button', { name: 'Send drafts' })).toBeDisabled();
+  await expect(panel.getByRole('button', { name: 'Export JSON' })).toBeDisabled();
+});

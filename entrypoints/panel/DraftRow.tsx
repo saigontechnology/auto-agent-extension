@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { TextChange } from '@/components/TextChange';
 import type { FeedbackItem } from '@/lib/types';
+import { Checkbox } from './Checkbox';
 import { IconButton } from './icons';
 import { PageLink } from './PageLink';
 
@@ -8,18 +9,31 @@ type Props = {
   item: FeedbackItem;
   number?: number;
   missing: boolean;
+  /** Whether the next Send includes this draft. */
+  included: boolean;
+  onInclude: (included: boolean) => void;
   onFocus?: () => void;
   onSave: (comment: string) => void;
   onDelete: () => void;
 };
 
-export function DraftRow({ item, number, missing, onFocus, onSave, onDelete }: Props) {
+export function DraftRow({
+  item,
+  number,
+  missing,
+  included,
+  onInclude,
+  onFocus,
+  onSave,
+  onDelete,
+}: Props) {
   const [editing, setEditing] = useState(false);
   const [comment, setComment] = useState(item.comment);
   const canSave = item.kind === 'text-edit' || comment.trim() !== '';
 
   return (
-    <li className="row">
+    <li className={included ? 'row row--draft' : 'row row--draft row--excluded'}>
+      <Checkbox checked={included} label="Include in send" onChange={onInclude} />
       <button type="button" className="row__main" onClick={onFocus} disabled={!onFocus}>
         <span className={number === undefined ? 'badge badge--blank' : 'badge'}>{number}</span>
         <span className="row__body">

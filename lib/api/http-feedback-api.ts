@@ -21,7 +21,7 @@ function isString(value: unknown): value is string {
 
 /**
  * Checks the fields the extension reads from sent feedback, so a contract mismatch shows up
- * as an error message instead of crashing the side panel.
+ * as an error message instead of crashing the review panel.
  */
 function isSentFeedback(value: unknown): boolean {
   if (!isRecord(value)) return false;
