@@ -120,7 +120,7 @@ Facts observed on the live API that the design depends on:
 | `lib/api/job-resolver.ts` | `resolveJob(origin)`: cache in `local:job-matches` (`origin → JobMatch`), then a scan on a miss; `chooseJob(origin, match)`; `forgetJob(origin)`. The scan pages through projects, lists each project's successful jobs, keeps demo jobs, and fetches their details with at most 4 requests in flight. Detail fetches already made are cached in `local:job-urls` (`jobId → deploymentUrl`) so a later scan only fetches new jobs | client, matcher |
 | `lib/api/feedback-markdown.ts` | `feedbackMarkdown(items, page)`: one section per draft (kind, page path, element tag/text, `source` or `nearestSource`, comment, text edit before → after, workflow title/expected/actual/steps). Over 10,000 characters it truncates at a section boundary and ends with "Truncated: the attached JSON file has all N items" | `flow/step-label` |
 | `lib/background-handlers.ts` | Handles the requests in 4.2 | the units above, stores |
-| `lib/feedback-store.ts` | Unchanged API. `SentFeedback` gains `run: { jobId: string; demoJobId: string }` so the panel can group items by run | — |
+| `lib/feedback-store.ts` | Unchanged API. `SentFeedback` gains an optional `run: { jobId, demoJobId, sentAt, requiresApproval }` so the panel can group items by run; items sent before this change have none | — |
 | `entrypoints/background.ts` | Wires dependencies, adds the external `ping` listener | — |
 | `entrypoints/panel/*` | Sign-in screen, account header, demo-job line and picker, Sent grouped by run with status | background client |
 | `entrypoints/options/App.tsx` | Shows the signed-in account and **Sign out**, or a note to sign in from the panel | session |
@@ -130,23 +130,25 @@ Removed: `lib/auth/oauth.ts`, `lib/auth/pkce.ts` and their tests, `lib/api/mock-
 ### 4.2 Background requests
 
 ```ts
-type JobMatch = { projectId: string; projectName: string; jobId: string; jobName: string; serviceType: string };
+type JobMatch = {
+  projectId: string; projectName: string;
+  jobId: string; jobName: string; serviceType: string; completedAt: string | null;
+};
 
 type BackgroundRequest =
   | { type: 'auth-state' }                                  // → { signedIn: boolean; user?: User }
   | { type: 'sign-in' }                                     // → AuthState
   | { type: 'sign-out' }                                    // → AuthState
-  | { type: 'resolve-job'; origin: string }                 // → JobMatch | null
-  | { type: 'choose-job'; origin: string; match: JobMatch } // → JobMatch
-  | { type: 'forget-job'; origin: string }                  // → null
-  | { type: 'list-projects' }                               // → Array<{ id, name }>
-  | { type: 'list-demo-jobs'; projectId: string }           // → JobMatch[]
-  | { type: 'job-runs'; demoJobId: string }                 // → FeedbackRun[]
-  | { type: 'submit'; projectId: string; origin: string; ids: string[] } // → SentFeedback[]
+  | { type: 'resolve-job'; url: string }                    // → JobMatch | null
+  | { type: 'choose-job'; url: string; match: JobMatch }    // → JobMatch
+  | { type: 'list-projects' }                               // → Project[]
+  | { type: 'list-demo-jobs'; project: Project }            // → JobMatch[]
+  | { type: 'job-runs'; url: string }                       // → FeedbackRun[] for the page's matched demo job
+  | { type: 'submit'; projectId: string; url: string; ids: string[] } // → SentFeedback[]
   | /* flow-* requests, unchanged */;
 ```
 
-`projectId` in `submit` is still the drafts' storage key from the page context (the host when the page has no `vibe:project-id` meta tag). It is unrelated to the Auto Agent project id.
+`url` is the page's URL; the background normalises it to an origin. `projectId` in `submit` is still the drafts' storage key from the page context (the host when the page has no `vibe:project-id` meta tag). It is unrelated to the Auto Agent project id.
 
 A new error code, `forbidden`, is returned for 403/404 on a job, next to `unauthorized`, `not-configured` (now: no demo job chosen) and `failed`.
 
@@ -166,7 +168,7 @@ A new error code, `forbidden`, is returned for 403/404 on a job, next to `unauth
 1. Look up the cached match for the origin. None → `not-configured`.
 2. Build the payload with `feedbackPayload(drafts, clientInfo())` and upload it as `auto-agent-feedback-<host>-<timestamp>.json`.
 3. `POST /jobs/:demoJobId/feedback` with `description: feedbackMarkdown(drafts)` and the returned file id.
-4. Save the drafts as `SentFeedback` with `author: { id: user.id, name: user.displayName }`, `status: 'open'` and `run: { jobId: <run id>, demoJobId }`.
+4. Save the drafts as `SentFeedback` with `author: { id: user.id, name: user.displayName }`, `status: 'open'` and `run: { jobId: <run id>, demoJobId, sentAt, requiresApproval }`.
 5. Remove the sent drafts.
 
 A failure at any step leaves the drafts in place. A file uploaded before a failed step 3 stays orphaned on the server, which is harmless. The panel disables Send while a submit is in flight, so a double click cannot start two runs.
