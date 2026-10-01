@@ -4,6 +4,7 @@ import { ApiError, type FeedbackApi, UnauthorizedError } from './api/feedback-ap
 import { createMockFeedbackApi } from './api/mock-feedback-api';
 import { type HandlerDeps, handleRequest } from './background-handlers';
 import { addDraft, listDrafts } from './draft-store';
+import { listFeedback } from './feedback-store';
 import { isBackgroundRequest } from './messages';
 import { DEFAULT_SETTINGS } from './settings-store';
 import { makeItem } from './test-helpers';
@@ -36,9 +37,6 @@ function failingApi(error: Error): FeedbackApi {
     submit: async () => {
       throw error;
     },
-    list: async () => {
-      throw error;
-    },
   };
 }
 
@@ -60,7 +58,7 @@ describe('handleRequest', () => {
   });
 
   it('does not call the API when there is nothing to send', async () => {
-    const api = { submit: vi.fn(), list: vi.fn() };
+    const api = { submit: vi.fn() };
     const result = await handleRequest(
       { type: 'submit', projectId: 'p1' },
       makeDeps({ createApi: () => api }),
@@ -82,7 +80,6 @@ describe('handleRequest', () => {
   it('keeps a draft that was added while the submit was in flight', async () => {
     await addDraft('p1', makeItem({ id: 'a' }));
     const api: FeedbackApi = {
-      list: async () => [],
       submit: async (_projectId, items) => {
         await addDraft('p1', makeItem({ id: 'late' }));
         return items.map((item) => ({ ...item, author: { id: 'u', name: 'U' }, status: 'open' }));
@@ -92,15 +89,25 @@ describe('handleRequest', () => {
     expect((await listDrafts('p1')).map((d) => d.id)).toEqual(['late']);
   });
 
-  it('lists sent feedback for a page', async () => {
-    await createMockFeedbackApi().submit('p1', [makeItem({ id: 'a' })]);
-    const result = await handleRequest({ type: 'list', projectId: 'p1', path: '/home' }, makeDeps());
-    expect(result).toMatchObject({ ok: true, value: [{ id: 'a' }] });
+  it('keeps what was sent in the local feedback store as open', async () => {
+    await addDraft('p1', makeItem({ id: 'a' }));
+    await handleRequest({ type: 'submit', projectId: 'p1' }, makeDeps());
+    expect(await listFeedback('p1')).toMatchObject([{ id: 'a', status: 'open' }]);
+  });
+
+  it('stores nothing when the submit fails', async () => {
+    await addDraft('p1', makeItem({ id: 'a' }));
+    await handleRequest(
+      { type: 'submit', projectId: 'p1' },
+      makeDeps({ createApi: () => failingApi(new ApiError('Request failed (500)', 500)) }),
+    );
+    expect(await listFeedback('p1')).toEqual([]);
   });
 
   it('reports unauthorized distinctly', async () => {
+    await addDraft('p1', makeItem({ id: 'a' }));
     const result = await handleRequest(
-      { type: 'list', projectId: 'p1', path: '/' },
+      { type: 'submit', projectId: 'p1' },
       makeDeps({ createApi: () => failingApi(new UnauthorizedError()) }),
     );
     expect(result).toEqual({ ok: false, code: 'unauthorized', error: 'Sign in to continue' });
@@ -109,7 +116,7 @@ describe('handleRequest', () => {
   it('refuses API calls when the real API is not configured', async () => {
     const createApi = vi.fn();
     const result = await handleRequest(
-      { type: 'list', projectId: 'p1', path: '/' },
+      { type: 'submit', projectId: 'p1' },
       makeDeps({ getSettings: async () => ({ ...DEFAULT_SETTINGS, useMock: false }), createApi }),
     );
     expect(result).toMatchObject({ ok: false, code: 'not-configured' });

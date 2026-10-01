@@ -3,6 +3,7 @@ import { type Browser, browser } from 'wxt/browser';
 import { watchTokens } from '@/lib/auth/oauth';
 import { sendToBackground } from '@/lib/background-client';
 import { listDrafts, watchDrafts } from '@/lib/draft-store';
+import { listFeedback, watchFeedback } from '@/lib/feedback-store';
 import {
   type AuthState,
   type ContentToPanel,
@@ -214,42 +215,37 @@ export function useAuth(): Auth {
   };
 }
 
-export type SentState = { sent: SentFeedback[]; error: string | null; reload: () => void };
-
-/** Loads the feedback already sent for the open page and mirrors it to the page for pins. */
+/** Watches the feedback sent from the open page and mirrors it to the page for pins. */
 export function useSent(
   context: PageContext | null,
   send: (message: PanelToContent) => void,
-  refreshKey: string,
-): SentState {
-  const [sent, setSent] = useState<SentFeedback[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [version, setVersion] = useState(0);
+): SentFeedback[] {
+  const [all, setAll] = useState<SentFeedback[]>([]);
   const projectId = context?.projectId;
   const path = context?.path;
 
   useEffect(() => {
-    if (!projectId || path === undefined) {
-      setSent([]);
-      setError(null);
+    if (!projectId) {
+      setAll([]);
       return;
     }
     let active = true;
-    void sendToBackground({ type: 'list', projectId, path }).then((result) => {
-      if (!active) return;
-      setSent(result.ok ? result.value : []);
-      setError(result.ok ? null : result.error);
+    void listFeedback(projectId).then((items) => {
+      if (active) setAll(items);
     });
+    const unwatch = watchFeedback(projectId, setAll);
     return () => {
       active = false;
+      unwatch();
     };
-  }, [projectId, path, version, refreshKey]);
+  }, [projectId]);
+
+  const sent = useMemo(() => all.filter((item) => item.page.path === path), [all, path]);
 
   // `context` is a new object after every reconnect, so a reloaded page gets the list again.
   useEffect(() => {
     if (context) send({ type: 'set-sent', items: sent });
   }, [context, sent, send]);
 
-  const reload = useCallback(() => setVersion((n) => n + 1), []);
-  return { sent, error, reload };
+  return sent;
 }

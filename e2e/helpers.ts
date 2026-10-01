@@ -1,4 +1,4 @@
-import type { BrowserContext, Page, Worker } from '@playwright/test';
+import type { BrowserContext, Locator, Page, Worker } from '@playwright/test';
 import type { browser } from 'wxt/browser';
 import { expect } from './fixtures';
 
@@ -6,6 +6,8 @@ import { expect } from './fixtures';
 declare const chrome: typeof browser;
 
 export const FIXTURE = 'http://localhost:4173/';
+/** The same fixture server under a host that is not in any allow-list. */
+export const OTHER_HOST = 'http://127.0.0.1:4173/';
 
 /** Opens a fixture page plus the side panel UI bound to that page's tab. */
 export async function openReview(
@@ -13,13 +15,14 @@ export async function openReview(
   worker: Worker,
   extensionId: string,
   path = '',
+  origin = FIXTURE,
 ): Promise<{ page: Page; panel: Page }> {
   const page = await context.newPage();
-  await page.goto(FIXTURE + path);
-  const tabId = await worker.evaluate(async (origin) => {
-    const [tab] = await chrome.tabs.query({ url: `${origin}*` });
+  await page.goto(origin + path);
+  const tabId = await worker.evaluate(async (prefix) => {
+    const [tab] = await chrome.tabs.query({ url: `${prefix}*` });
     return tab?.id;
-  }, FIXTURE);
+  }, origin);
   expect(tabId).toBeDefined();
 
   const panel = await context.newPage();
@@ -43,6 +46,17 @@ export async function openPanelOnBlankTab(
   const panel = await context.newPage();
   await panel.goto(`chrome-extension://${extensionId}/sidepanel.html?tabId=${tabId}`);
   return panel;
+}
+
+/** Waits until the panel is connected to a page that can be reviewed. */
+export async function expectConnected(panel: Page): Promise<void> {
+  await expect(panel.getByRole('group', { name: 'Mode' })).toBeVisible();
+}
+
+/** Checks a text change shown as struck-through old text followed by the new text. */
+export async function expectTextChange(scope: Locator, before: string, after: string): Promise<void> {
+  await expect(scope.locator('del')).toHaveText(before);
+  await expect(scope.locator('ins')).toHaveText(after);
 }
 
 export async function setMode(panel: Page, mode: 'Off' | 'Select' | 'Text'): Promise<void> {

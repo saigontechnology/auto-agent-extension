@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { SOURCE_ATTR } from '@/lib/element-descriptor';
 import { eventElement, firstChildOf, isOwnUi, parentOf } from '@/lib/picker';
 import { HighlightBox } from './HighlightBox';
@@ -21,9 +21,14 @@ function block(event: Event): void {
   event.stopImmediatePropagation();
 }
 
-function labelFor(element: Element): string {
+function labelFor(element: Element): ReactNode {
   const source = element.getAttribute(SOURCE_ATTR);
-  return source ? `${element.localName} · ${source}` : element.localName;
+  return (
+    <>
+      <b>{element.localName}</b>
+      {source && ` ${source}`}
+    </>
+  );
 }
 
 export function Picker({ host, remoteKey, onPick, onExit }: Props) {

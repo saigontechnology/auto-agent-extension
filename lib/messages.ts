@@ -29,14 +29,12 @@ export type AuthState = { useMock: boolean; configured: boolean; signedIn: boole
 
 export type BackgroundRequest =
   | { type: 'submit'; projectId: string }
-  | { type: 'list'; projectId: string; path: string }
   | { type: 'sign-in' }
   | { type: 'sign-out' }
   | { type: 'auth-state' };
 
 export type BackgroundResponse = {
   submit: SentFeedback[];
-  list: SentFeedback[];
   'sign-in': AuthState;
   'sign-out': AuthState;
   'auth-state': AuthState;
@@ -48,7 +46,6 @@ export type Result<T> = { ok: true; value: T } | { ok: false; code: ErrorCode; e
 
 const REQUEST_TYPES: ReadonlyArray<BackgroundRequest['type']> = [
   'submit',
-  'list',
   'sign-in',
   'sign-out',
   'auth-state',

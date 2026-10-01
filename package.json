@@ -11,9 +11,11 @@
     "test": "vitest run",
     "fixture": "node fixtures/serve.mjs",
     "test:e2e": "wxt build && playwright test",
+    "demo": "wxt build && node scripts/demo.mjs",
     "postinstall": "wxt prepare"
   },
   "dependencies": {
+    "@fontsource/barlow": "^5.3.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

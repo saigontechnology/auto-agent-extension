@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { locationLabel } from '@/lib/pins';
+import { TextChange } from '@/components/TextChange';
 import type { FeedbackItem } from '@/lib/types';
+import { IconButton } from './icons';
+import { PageLink } from './PageLink';
 
 type Props = {
   item: FeedbackItem;
@@ -11,8 +13,6 @@ type Props = {
   onDelete: () => void;
 };
 
-const KIND_LABEL = { element: 'Element', 'text-edit': 'Text', page: 'Page' } as const;
-
 export function DraftRow({ item, number, missing, onFocus, onSave, onDelete }: Props) {
   const [editing, setEditing] = useState(false);
   const [comment, setComment] = useState(item.comment);
@@ -21,22 +21,31 @@ export function DraftRow({ item, number, missing, onFocus, onSave, onDelete }: P
   return (
     <li className="row">
       <button type="button" className="row__main" onClick={onFocus} disabled={!onFocus}>
-        <span className="badge">{number ?? '•'}</span>
+        <span className={number === undefined ? 'badge badge--blank' : 'badge'}>{number}</span>
         <span className="row__body">
-          <span className="row__meta">
-            {KIND_LABEL[item.kind]} · {locationLabel(item)}
-          </span>
-          {item.textEdit && (
-            <span className="row__edit">
-              “{item.textEdit.before}” → “{item.textEdit.after}”
-            </span>
-          )}
+          {item.textEdit && <TextChange className="row__edit" {...item.textEdit} />}
           {!editing && item.comment && <span className="row__comment">{item.comment}</span>}
           {missing && <span className="row__warning">element not found</span>}
         </span>
       </button>
 
-      {editing ? (
+      {!editing && (
+        <div className="row__tools">
+          <IconButton
+            icon="edit"
+            label="Edit"
+            onClick={() => {
+              setComment(item.comment);
+              setEditing(true);
+            }}
+          />
+          <IconButton icon="delete" label="Delete" tone="danger" onClick={onDelete} />
+        </div>
+      )}
+
+      <PageLink page={item.page} />
+
+      {editing && (
         <form
           className="row__editor"
           onSubmit={(event) => {
@@ -56,21 +65,6 @@ export function DraftRow({ item, number, missing, onFocus, onSave, onDelete }: P
             </button>
           </div>
         </form>
-      ) : (
-        <div className="row__actions">
-          <button
-            type="button"
-            onClick={() => {
-              setComment(item.comment);
-              setEditing(true);
-            }}
-          >
-            Edit
-          </button>
-          <button type="button" className="danger" onClick={onDelete}>
-            Delete
-          </button>
-        </div>
       )}
     </li>
   );

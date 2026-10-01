@@ -49,24 +49,15 @@ describe('HttpFeedbackApi', () => {
     expect(JSON.parse(init?.body as string)).toEqual({ items: [makeItem({ id: 'a' })], client });
   });
 
-  it('lists by encoded path', async () => {
-    const { api, fetchMock } = setup([json([])]);
-    expect(await api.list('p1', '/#/settings?x=1')).toEqual([]);
-    const [url, init] = fetchMock.mock.calls[0]!;
-    expect(url).toBe('https://api.example.com/v1/projects/p1/feedback?path=%2F%23%2Fsettings%3Fx%3D1');
-    expect(init?.method).toBe('GET');
-    expect(headersOf(init).Authorization).toBe('Bearer token-1');
-  });
-
   it('fails without calling the server when signed out', async () => {
     const { api, fetchMock } = setup([], { getAccessToken: vi.fn(async () => null) });
-    await expect(api.list('p1', '/')).rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(api.submit('p1', [makeItem()])).rejects.toBeInstanceOf(UnauthorizedError);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('refreshes the token once after a 401 and retries', async () => {
     const { api, fetchMock, deps } = setup([json({}, 401), json([makeSent()])]);
-    expect(await api.list('p1', '/')).toEqual([makeSent()]);
+    expect(await api.submit('p1', [makeItem()])).toEqual([makeSent()]);
     expect(deps.getAccessToken).toHaveBeenLastCalledWith({ forceRefresh: true });
     expect(headersOf(fetchMock.mock.calls[1]![1]).Authorization).toBe('Bearer token-2');
     expect(deps.onUnauthorized).not.toHaveBeenCalled();
@@ -74,7 +65,7 @@ describe('HttpFeedbackApi', () => {
 
   it('gives up and reports unauthorized after a second 401', async () => {
     const { api, fetchMock, deps } = setup([json({}, 401), json({}, 401)]);
-    await expect(api.list('p1', '/')).rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(api.submit('p1', [makeItem()])).rejects.toBeInstanceOf(UnauthorizedError);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(deps.onUnauthorized).toHaveBeenCalledTimes(1);
   });
@@ -85,7 +76,7 @@ describe('HttpFeedbackApi', () => {
         options?.forceRefresh ? null : 'token-1',
       ),
     });
-    await expect(api.list('p1', '/')).rejects.toBeInstanceOf(UnauthorizedError);
+    await expect(api.submit('p1', [makeItem()])).rejects.toBeInstanceOf(UnauthorizedError);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -99,17 +90,17 @@ describe('HttpFeedbackApi', () => {
 
   it('reports network failures as an ApiError', async () => {
     const { api } = setup([new TypeError('Failed to fetch')]);
-    await expect(api.list('p1', '/')).rejects.toThrow('Could not reach the server');
+    await expect(api.submit('p1', [makeItem()])).rejects.toThrow('Could not reach the server');
   });
 
   it('rejects a body that is not an array', async () => {
     const { api } = setup([json({ items: [] })]);
-    await expect(api.list('p1', '/')).rejects.toThrow('unexpected response');
+    await expect(api.submit('p1', [makeItem()])).rejects.toThrow('unexpected response');
   });
 
   it('rejects a body that is not JSON', async () => {
     const { api } = setup([new Response('<html>gateway</html>', { status: 200 })]);
-    await expect(api.list('p1', '/')).rejects.toThrow('unexpected response');
+    await expect(api.submit('p1', [makeItem()])).rejects.toThrow('unexpected response');
   });
 
   it('rejects a response whose items lack fields the UI reads', async () => {
@@ -127,7 +118,7 @@ describe('HttpFeedbackApi', () => {
     ];
     for (const item of bad) {
       const { api } = setup([json([makeSent({ id: 'ok' }), item])]);
-      await expect(api.list('p1', '/')).rejects.toThrow('unexpected response');
+      await expect(api.submit('p1', [makeItem()])).rejects.toThrow('unexpected response');
     }
   });
 
@@ -135,6 +126,6 @@ describe('HttpFeedbackApi', () => {
     const pageComment = makeSent({ id: 'p', kind: 'page', anchor: undefined });
     const textEdit = makeSent({ id: 't', kind: 'text-edit', textEdit: { before: 'a', after: 'b' } });
     const { api } = setup([json([pageComment, textEdit])]);
-    expect((await api.list('p1', '/')).map((item) => item.id)).toEqual(['p', 't']);
+    expect((await api.submit('p1', [makeItem()])).map((item) => item.id)).toEqual(['p', 't']);
   });
 });

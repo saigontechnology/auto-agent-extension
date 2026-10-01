@@ -1,6 +1,7 @@
+import type { ReactNode } from 'react';
 import { useLayoutTick } from './use-layout-tick';
 
-type Props = { element: Element; label?: string; tone?: 'hover' | 'selected' | 'edit' };
+type Props = { element: Element; label?: ReactNode; tone?: 'hover' | 'selected' | 'edit' };
 
 export function HighlightBox({ element, label, tone = 'hover' }: Props) {
   useLayoutTick();

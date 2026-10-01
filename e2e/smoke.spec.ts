@@ -1,9 +1,10 @@
+import { readFileSync } from 'node:fs';
 import { expect, test } from './fixtures';
-import { openReview } from './helpers';
+import { OTHER_HOST, expectConnected, expectTextChange, openReview, pinComment } from './helpers';
 
 test('pin a comment, send it, and see it as sent', async ({ context, worker, extensionId }) => {
   const { page, panel } = await openReview(context, worker, extensionId);
-  await expect(panel.getByText('demo-project · build-001')).toBeVisible();
+  await expectConnected(panel);
 
   await panel.getByRole('button', { name: 'Select', exact: true }).click();
   await page.bringToFront();
@@ -18,7 +19,8 @@ test('pin a comment, send it, and see it as sent', async ({ context, worker, ext
   await panel.bringToFront();
   const drafts = panel.getByRole('region', { name: 'Drafts' });
   await expect(drafts.getByText('Make this button bigger')).toBeVisible();
-  await expect(drafts.getByText('src/pages/Home.tsx:10')).toBeVisible();
+  await expect(drafts.getByRole('link', { name: 'localhost:4173/' })).toBeVisible();
+  await expect(drafts.getByText('src/pages/Home.tsx:10')).toHaveCount(0);
 
   await panel.getByRole('button', { name: 'Send 1' }).click();
   await expect(panel.getByRole('heading', { name: 'Drafts (0)' })).toBeVisible();
@@ -39,16 +41,61 @@ test('edit text inline and keep the draft across a reload', async ({ context, wo
   await page.getByRole('button', { name: 'Cancel' }).click();
 
   const drafts = panel.getByRole('region', { name: 'Drafts' });
-  await expect(drafts.getByText('“Fresh fruit delivered to your door.” → “Fruit at your door.”')).toBeVisible();
+  await expectTextChange(drafts, 'Fresh fruit delivered to your door.', 'Fruit at your door.');
 
   await page.reload();
   await expect(page.locator('#tagline')).toHaveText('Fresh fruit delivered to your door.');
   await expect(page.locator('[data-vf-pin="draft"]')).toHaveCount(1);
-  await expect(drafts.getByText('→ “Fruit at your door.”')).toBeVisible();
+  await expectTextChange(drafts, 'Fresh fruit delivered to your door.', 'Fruit at your door.');
 });
 
-test('a page without the meta tags is reported as not a preview', async ({ context, worker, extensionId }) => {
-  const { panel } = await openReview(context, worker, extensionId, 'plain.html');
-  await expect(panel.getByText('This page is not a preview build')).toBeVisible();
-  await expect(panel.getByRole('button', { name: 'Select', exact: true })).toHaveCount(0);
+test('any page can be reviewed, without preview markers and on any host', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  const { page, panel } = await openReview(context, worker, extensionId, 'plain.html', OTHER_HOST);
+  await expectConnected(panel);
+
+  await panel.getByRole('button', { name: 'Select', exact: true }).click();
+  await pinComment(page, 'h1', 'Works without markers');
+  await expect(page.locator('[data-vf-pin="draft"]')).toHaveText('1');
+
+  // The export holds the body Send would POST; its name shows the host was used as the project.
+  const [download] = await Promise.all([
+    panel.waitForEvent('download'),
+    panel.getByRole('button', { name: 'Export JSON' }).click(),
+  ]);
+  expect(download.suggestedFilename()).toMatch(/^auto-agent-feedback-127\.0\.0\.1-4173-.+\.json$/);
+  const payload = JSON.parse(readFileSync(await download.path(), 'utf8'));
+  expect(payload.client.extensionVersion).toBeTruthy();
+  expect(payload.items).toHaveLength(1);
+  expect(payload.items[0]).toMatchObject({
+    buildId: 'local',
+    kind: 'element',
+    comment: 'Works without markers',
+    page: { path: '/plain.html' },
+  });
+
+  await panel.getByRole('button', { name: 'Send 1' }).click();
+  await expect(
+    panel.getByRole('region', { name: 'Sent' }).getByText('Works without markers'),
+  ).toBeVisible();
+});
+
+test('the panel offers no API settings or sign-in while feedback is local only', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  const { panel } = await openReview(context, worker, extensionId);
+  await expectConnected(panel);
+  await expect(panel.getByRole('button', { name: 'Options' })).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: 'Sign in' })).toHaveCount(0);
+  await expect(panel.getByText('Mock', { exact: true })).toHaveCount(0);
+
+  const options = await context.newPage();
+  await options.goto(`chrome-extension://${extensionId}/options.html`);
+  await expect(options.getByText('API settings are turned off in this build.')).toBeVisible();
+  await expect(options.getByRole('button', { name: 'Save' })).toHaveCount(0);
 });

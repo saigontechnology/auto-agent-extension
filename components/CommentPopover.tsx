@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { popoverPosition } from '@/lib/popover-position';
+import { TextChange } from './TextChange';
 
 type Props = {
   anchorRect: { top: number; bottom: number; left: number };
   title: string;
-  detail?: string;
+  textEdit?: { before: string; after: string };
   initial: string;
   allowEmpty: boolean;
   onSave: (comment: string) => void;
@@ -13,7 +14,7 @@ type Props = {
 };
 
 export function CommentPopover(props: Props) {
-  const { anchorRect, title, detail, initial, allowEmpty, onSave, onCancel, onDelete } = props;
+  const { anchorRect, title, textEdit, initial, allowEmpty, onSave, onCancel, onDelete } = props;
   const [comment, setComment] = useState(initial);
   const canSave = allowEmpty || comment.trim() !== '';
   const position = popoverPosition(anchorRect, {
@@ -39,7 +40,7 @@ export function CommentPopover(props: Props) {
       }}
     >
       <div className="vf-popover__title">{title}</div>
-      {detail && <div className="vf-popover__detail">{detail}</div>}
+      {textEdit && <TextChange className="vf-popover__detail" {...textEdit} />}
       <textarea
         autoFocus
         className="vf-popover__input"

@@ -3,8 +3,10 @@ import { createHttpFeedbackApi } from '@/lib/api/http-feedback-api';
 import { createMockFeedbackApi } from '@/lib/api/mock-feedback-api';
 import { type OAuthDeps, getAccessToken, isSignedIn, signIn, signOut } from '@/lib/auth/oauth';
 import { type HandlerDeps, handleRequest } from '@/lib/background-handlers';
+import { clientInfo } from '@/lib/client-info';
 import { isBackgroundRequest } from '@/lib/messages';
-import { getSettings } from '@/lib/settings-store';
+import { LOCAL_ONLY } from '@/lib/config';
+import { DEFAULT_SETTINGS, getSettings } from '@/lib/settings-store';
 import type { Settings } from '@/lib/types';
 
 export default defineBackground(() => {
@@ -19,16 +21,14 @@ export default defineBackground(() => {
   });
 
   const deps: HandlerDeps = {
-    getSettings,
+    // While feedback is local only, saved API settings are ignored and the mock API is used.
+    getSettings: LOCAL_ONLY ? async () => DEFAULT_SETTINGS : getSettings,
     createApi: (settings) =>
       settings.useMock
         ? createMockFeedbackApi()
         : createHttpFeedbackApi({
             apiBase: settings.apiBase,
-            client: {
-              extensionVersion: browser.runtime.getManifest().version,
-              userAgent: navigator.userAgent,
-            },
+            client: clientInfo(),
             fetch: (input, init) => fetch(input, init),
             getAccessToken: (options) => getAccessToken(oauthDeps(settings), options),
             onUnauthorized: signOut,

@@ -56,11 +56,11 @@ export function PinLayer({ pins, focus, onUnresolved, onOpen }: Props) {
             type="button"
             data-vf-pin={pin.state}
             className={`vf-pin vf-pin--${pin.state}${focused}`}
-            style={{ top: rect.top - 10, left: rect.right - 10 }}
+            style={{ top: rect.top - 12, left: rect.right - 12 }}
             title={tooltip(pin)}
             onClick={() => onOpen(pin, element)}
           >
-            {pin.number}
+            <span className="vf-pin__shape">{pin.number}</span>
           </button>
         );
       })}

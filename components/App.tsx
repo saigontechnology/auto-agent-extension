@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ContentScriptContext } from '#imports';
 import { resolveAnchor } from '@/lib/anchor-resolver';
+import { REQUIRE_PREVIEW_MARKERS } from '@/lib/config';
 import { addDraft, listDrafts, removeDraft, updateDraft, watchDrafts } from '@/lib/draft-store';
 import { describeElement } from '@/lib/element-descriptor';
 import { createItem, currentEnv } from '@/lib/feedback-factory';
@@ -28,7 +29,7 @@ function withLiveTitle(context: PageContext): PageContext {
 
 export function App({ ctx, host }: Props) {
   const [context, setContext] = useState<PageContext | null>(() =>
-    readPageContext(document, location),
+    readPageContext(document, location, { requireMarkers: REQUIRE_PREVIEW_MARKERS }),
   );
   const [mode, setMode] = useState<Mode>('off');
   const [drafts, setDrafts] = useState<FeedbackItem[]>([]);
@@ -73,7 +74,7 @@ export function App({ ctx, host }: Props) {
     ctx.addEventListener(window, 'wxt:locationchange', () => {
       ctx.setTimeout(() => {
         setComposer(null);
-        setContext(readPageContext(document, location));
+        setContext(readPageContext(document, location, { requireMarkers: REQUIRE_PREVIEW_MARKERS }));
       }, 0);
     });
   }, [ctx]);
@@ -207,7 +208,7 @@ export function App({ ctx, host }: Props) {
             key={editedItem?.id ?? 'new'}
             anchorRect={composer.element.getBoundingClientRect()}
             title={textEdit ? 'Text change' : editedItem ? 'Edit comment' : 'New comment'}
-            detail={textEdit ? `"${textEdit.before}" → "${textEdit.after}"` : undefined}
+            textEdit={textEdit}
             initial={editedItem?.comment ?? ''}
             allowEmpty={editedItem?.kind === 'text-edit'}
             onSave={saveComposer}

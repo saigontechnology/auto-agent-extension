@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { browser } from 'wxt/browser';
+import { BrandMark } from '@/components/BrandMark';
+import { feedbackPayload } from '@/lib/api/feedback-payload';
 import { sendToBackground } from '@/lib/background-client';
+import { clientInfo } from '@/lib/client-info';
+import { LOCAL_ONLY } from '@/lib/config';
 import { removeDraft, updateDraft } from '@/lib/draft-store';
-import { groupDrafts, locationLabel, pagePins } from '@/lib/pins';
+import { setFeedbackStatus } from '@/lib/feedback-store';
+import { groupDrafts, pagePins } from '@/lib/pins';
 import type { Mode } from '@/lib/types';
 import { DraftRow } from './DraftRow';
+import { SentRow } from './SentRow';
 import {
   type ConnectionStatus,
   useAuth,
@@ -25,18 +31,26 @@ const NOTICES: Record<ConnectionStatus, string> = {
   connected:
     'This page is not a preview build. Open a preview deployed by the tool to leave feedback.',
   unreachable:
-    'Vibe Feedback is not running on this page. If this is a preview build, reload the page.',
+    'Auto Agent is not running on this page. If this is a preview build, reload the page.',
 };
+
+/** Saves `data` as a pretty-printed JSON file through the browser's download flow. */
+function downloadJson(filename: string, data: unknown): void {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
 
 export function App() {
   const tabId = useTargetTab();
   const { status, context, mode, unresolved, send, setMode } = usePanelConnection(tabId);
   const drafts = useDrafts(context?.projectId);
   const auth = useAuth();
-  const authKey = auth.state
-    ? `${auth.state.useMock}:${auth.state.configured}:${auth.state.signedIn}`
-    : 'loading';
-  const { sent, error: sentError, reload } = useSent(context, send, authKey);
+  const sent = useSent(context, send);
 
   const [pageComment, setPageComment] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -69,24 +83,22 @@ export function App() {
 
   const header = (
     <header className="header">
-      <div>
-        <h1>Vibe Feedback</h1>
-        {context && (
-          <p className="muted">
-            {context.projectId} · {context.buildId}
-          </p>
+      <div className="header__brand">
+        <BrandMark className="header__mark" />
+        <h1>Auto Agent</h1>
+        {!LOCAL_ONLY && (
+          <div className="header__actions">
+            {auth.state && !auth.state.useMock && auth.state.configured && (
+              <button type="button" onClick={auth.state.signedIn ? auth.signOut : auth.signIn}>
+                {auth.state.signedIn ? 'Sign out' : 'Sign in'}
+              </button>
+            )}
+            {auth.state?.useMock && <span className="tag">Mock</span>}
+            <button type="button" onClick={openOptions}>
+              Options
+            </button>
+          </div>
         )}
-      </div>
-      <div className="header__actions">
-        {auth.state && !auth.state.useMock && auth.state.configured && (
-          <button type="button" onClick={auth.state.signedIn ? auth.signOut : auth.signIn}>
-            {auth.state.signedIn ? 'Sign out' : 'Sign in'}
-          </button>
-        )}
-        {auth.state?.useMock && <span className="tag">Mock</span>}
-        <button type="button" onClick={openOptions}>
-          Options
-        </button>
       </div>
     </header>
   );
@@ -95,7 +107,9 @@ export function App() {
     return (
       <div className="panel">
         {header}
-        <p className="notice">{NOTICES[status]}</p>
+        <div className="panel__body">
+          <p className="notice">{NOTICES[status]}</p>
+        </div>
       </div>
     );
   }
@@ -109,8 +123,14 @@ export function App() {
     setSendError(null);
     const result = await sendToBackground({ type: 'submit', projectId });
     setSending(false);
-    if (result.ok) reload();
-    else setSendError(result.error);
+    if (!result.ok) setSendError(result.error);
+  };
+
+  // Lets the tool be tried before the API exists: the file holds the exact body Send will POST.
+  const exportDrafts = () => {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const name = projectId.replace(/[^\w.-]+/g, '-');
+    downloadJson(`auto-agent-feedback-${name}-${stamp}.json`, feedbackPayload(drafts, clientInfo()));
   };
 
   const addPageComment = () => {
@@ -120,71 +140,79 @@ export function App() {
     setPageComment(null);
   };
 
+  const sendLabel =
+    drafts.length === 0
+      ? 'Send drafts'
+      : `Send ${drafts.length} ${drafts.length === 1 ? 'draft' : 'drafts'}`;
+
   return (
     <div className="panel">
       {header}
-      {auth.error && <p className="error">{auth.error}</p>}
-      {auth.state && !auth.state.configured && (
-        <p className="notice">
-          The API is not set up yet.{' '}
-          <button type="button" className="link" onClick={openOptions}>
-            Open Options
-          </button>
-        </p>
-      )}
+      <div className="panel__body">
+        {auth.error && <p className="error">{auth.error}</p>}
+        {auth.state && !auth.state.configured && (
+          <p className="notice">
+            The API is not set up yet.{' '}
+            <button type="button" className="link" onClick={openOptions}>
+              Open Options
+            </button>
+          </p>
+        )}
 
-      <div className="toolbar">
-        <div className="segmented" role="group" aria-label="Mode">
-          {MODES.map((option) => (
-            <button
-              key={option.mode}
-              type="button"
-              aria-pressed={mode === option.mode}
-              onClick={() => setMode(option.mode)}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-        <button type="button" onClick={() => setPageComment('')}>
-          Add page comment
-        </button>
-      </div>
-
-      {pageComment !== null && (
-        <form
-          className="page-comment"
-          onSubmit={(event) => {
-            event.preventDefault();
-            addPageComment();
-          }}
-        >
-          <textarea
-            autoFocus
-            placeholder="Comment about this page as a whole"
-            value={pageComment}
-            onChange={(event) => setPageComment(event.target.value)}
-          />
-          <div className="row__actions">
-            <button type="button" onClick={() => setPageComment(null)}>
-              Cancel
-            </button>
-            <button type="submit" className="primary" disabled={pageComment.trim() === ''}>
-              Add
-            </button>
+        <div className="toolbar">
+          <div className="segmented" role="group" aria-label="Mode">
+            {MODES.map((option) => (
+              <button
+                key={option.mode}
+                type="button"
+                aria-pressed={mode === option.mode}
+                onClick={() => setMode(option.mode)}
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
-        </form>
-      )}
+          <button type="button" onClick={() => setPageComment('')}>
+            Add page comment
+          </button>
+        </div>
 
-      <main className="lists">
-        <section aria-label="Drafts">
-          <h2>Drafts ({drafts.length})</h2>
-          {drafts.length === 0 && <p className="muted">Pick Select or Text, then click the page.</p>}
-          {groups.map((group) => (
-            <div key={group.path}>
-              <h3>{group.path}</h3>
-              <ul>
-                {group.items.map((item) => (
+        {pageComment !== null && (
+          <form
+            className="page-comment"
+            onSubmit={(event) => {
+              event.preventDefault();
+              addPageComment();
+            }}
+          >
+            <textarea
+              autoFocus
+              placeholder="Comment about this page as a whole"
+              value={pageComment}
+              onChange={(event) => setPageComment(event.target.value)}
+            />
+            <div className="row__actions">
+              <button type="button" onClick={() => setPageComment(null)}>
+                Cancel
+              </button>
+              <button type="submit" className="primary" disabled={pageComment.trim() === ''}>
+                Add
+              </button>
+            </div>
+          </form>
+        )}
+
+        <main className="lists">
+          <section aria-label="Drafts">
+            <h2>Drafts ({drafts.length})</h2>
+            {drafts.length === 0 && (
+              <p className="empty">
+                No drafts yet. Choose Select or Text above, then click something on the page.
+              </p>
+            )}
+            <ul>
+              {groups.flatMap((group) =>
+                group.items.map((item) => (
                   <DraftRow
                     key={item.id}
                     item={item}
@@ -198,52 +226,36 @@ export function App() {
                     onSave={(comment) => void updateDraft(projectId, item.id, { comment })}
                     onDelete={() => void removeDraft(projectId, item.id)}
                   />
-                ))}
-              </ul>
-            </div>
-          ))}
-        </section>
+                )),
+              )}
+            </ul>
+          </section>
 
-        <section aria-label="Sent">
-          <h2>Sent on this page ({sent.length})</h2>
-          {sentError && (
-            <p className="error">
-              {sentError}{' '}
-              <button type="button" className="link" onClick={reload}>
-                Retry
-              </button>
-            </p>
-          )}
-          <ul>
-            {sent.map((item) => (
-              <li key={item.id} className={`row row--${item.status}`}>
-                <button
-                  type="button"
-                  className="row__main"
-                  disabled={!numbers.has(item.id)}
-                  onClick={() => send({ type: 'focus-item', id: item.id })}
-                >
-                  <span className="badge badge--sent">{numbers.get(item.id) ?? '•'}</span>
-                  <span className="row__body">
-                    <span className="row__meta">
-                      {item.author.name} · {item.status} · {locationLabel(item)}
-                    </span>
-                    {item.textEdit && (
-                      <span className="row__edit">
-                        “{item.textEdit.before}” → “{item.textEdit.after}”
-                      </span>
-                    )}
-                    {item.comment && <span className="row__comment">{item.comment}</span>}
-                    {missing.has(item.id) && (
-                      <span className="row__warning">element not found</span>
-                    )}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      </main>
+          <section aria-label="Sent">
+            <h2>Sent on this page ({sent.length})</h2>
+            {sent.length === 0 && (
+              <p className="empty">Nothing has been sent from this page yet.</p>
+            )}
+            <ul>
+              {sent.map((item) => (
+                <SentRow
+                  key={item.id}
+                  item={item}
+                  number={numbers.get(item.id)}
+                  missing={missing.has(item.id)}
+                  onFocus={
+                    numbers.has(item.id)
+                      ? () => send({ type: 'focus-item', id: item.id })
+                      : undefined
+                  }
+                  onResolve={() => void setFeedbackStatus(projectId, item.id, 'resolved')}
+                  onReopen={() => void setFeedbackStatus(projectId, item.id, 'open')}
+                />
+              ))}
+            </ul>
+          </section>
+        </main>
+      </div>
 
       <footer className="footer">
         {sendError && (
@@ -257,14 +269,19 @@ export function App() {
         {auth.state && auth.state.configured && !auth.state.signedIn && (
           <p className="muted">Sign in to send your drafts.</p>
         )}
-        <button
-          type="button"
-          className="primary footer__send"
-          disabled={!canSend || sending || drafts.length === 0}
-          onClick={() => void submit()}
-        >
-          {sending ? 'Sending…' : `Send ${drafts.length}`}
-        </button>
+        <div className="footer__buttons">
+          <button type="button" disabled={drafts.length === 0} onClick={exportDrafts}>
+            Export JSON
+          </button>
+          <button
+            type="button"
+            className="primary footer__send"
+            disabled={!canSend || sending || drafts.length === 0}
+            onClick={() => void submit()}
+          >
+            {sending ? 'Sending…' : sendLabel}
+          </button>
+        </div>
       </footer>
     </div>
   );

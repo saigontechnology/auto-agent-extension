@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { browser } from 'wxt/browser';
+import { LOCAL_ONLY } from '@/lib/config';
 import {
   getSettings,
   normalizeSettings,
@@ -11,6 +12,21 @@ import type { OAuthSettings, Settings } from '@/lib/types';
 
 type Status = { kind: 'ok' | 'error'; messages: string[] };
 
+function CompanyLogo() {
+  return (
+    <picture>
+      <source srcSet="/brand/logo-white.svg" media="(prefers-color-scheme: dark)" />
+      <img
+        className="options__logo"
+        src="/brand/logo-black.svg"
+        alt="Saigon Technology"
+        width="175"
+        height="40"
+      />
+    </picture>
+  );
+}
+
 export function App() {
   const [form, setForm] = useState<Settings | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
@@ -18,6 +34,18 @@ export function App() {
   useEffect(() => {
     void getSettings().then(setForm);
   }, []);
+
+  if (LOCAL_ONLY) {
+    return (
+      <div className="options">
+        <CompanyLogo />
+        <h1>Auto Agent options</h1>
+        <p className="notice">
+          API settings are turned off in this build. Feedback is stored in this browser only.
+        </p>
+      </div>
+    );
+  }
 
   // The form is rendered only once the saved settings have loaded; otherwise an edit made
   // in the meantime would be overwritten when they arrive.
@@ -54,7 +82,8 @@ export function App() {
 
   return (
     <form className="options" onSubmit={(event) => void onSubmit(event)}>
-      <h1>Vibe Feedback Options</h1>
+      <CompanyLogo />
+      <h1>Auto Agent options</h1>
 
       <label className="check">
         <input

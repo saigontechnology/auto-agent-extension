@@ -1,6 +1,14 @@
 import { expect, test } from './fixtures';
 import type { browser } from 'wxt/browser';
-import { editText, openPanelOnBlankTab, openReview, pinComment, setMode } from './helpers';
+import {
+  editText,
+  expectConnected,
+  expectTextChange,
+  openPanelOnBlankTab,
+  openReview,
+  pinComment,
+  setMode,
+} from './helpers';
 
 // `worker.evaluate` callbacks run inside the extension's service worker, where `chrome` exists.
 declare const chrome: typeof browser;
@@ -14,13 +22,13 @@ test('hovering labels the element; panel keys steer and leave the picker', async
   await setMode(panel, 'Select');
   await page.locator('#title').hover();
   const label = page.locator('.vf-highlight__label');
-  await expect(label).toHaveText('h1 · src/pages/Home.tsx:12');
+  await expect(label).toHaveText('h1 src/pages/Home.tsx:12');
 
   // Focus is still on the panel's Select button, as it is for a real reviewer.
   await panel.keyboard.press('ArrowUp');
-  await expect(label).toHaveText('section · src/pages/Home.tsx:10');
+  await expect(label).toHaveText('section src/pages/Home.tsx:10');
   await panel.keyboard.press('ArrowDown');
-  await expect(label).toHaveText('h1 · src/pages/Home.tsx:12');
+  await expect(label).toHaveText('h1 src/pages/Home.tsx:12');
 
   await panel.keyboard.press('Escape');
   await expect(panel.getByRole('button', { name: 'Off', exact: true })).toHaveAttribute('aria-pressed', 'true');
@@ -75,9 +83,9 @@ test('drafts from another page are listed but not pinned', async ({
 
   await page.locator('#about-link').click();
   await expect(page).toHaveTitle('About · Demo Shop');
-  await expect(panel.getByText('demo-project · build-001')).toBeVisible();
+  await expectConnected(panel);
   const drafts = panel.getByRole('region', { name: 'Drafts' });
-  await expect(drafts.getByRole('heading', { name: '/', exact: true })).toBeVisible();
+  await expect(drafts.getByRole('link', { name: 'localhost:4173/', exact: true })).toBeVisible();
   await expect(drafts.getByText('Shorter headline')).toBeVisible();
   await expect(page.locator('[data-vf-pin]')).toHaveCount(0);
 
@@ -105,7 +113,7 @@ test('a page comment has no pin; drafts can be edited and deleted in the panel',
   await panel.getByRole('button', { name: 'Add', exact: true }).click();
 
   const drafts = panel.getByRole('region', { name: 'Drafts' });
-  await expect(drafts.getByText('Page · Whole page')).toBeVisible();
+  await expect(drafts.getByRole('link', { name: 'localhost:4173/' })).toBeVisible();
   await expect(drafts.getByText('Needs a back button')).toBeVisible();
   await expect(page.locator('[data-vf-pin]')).toHaveCount(0);
 
@@ -134,9 +142,7 @@ test('re-editing text amends one draft; editing it back removes the draft', asyn
 
   const drafts = panel.getByRole('region', { name: 'Drafts' });
   await expect(panel.getByRole('heading', { name: 'Drafts (1)' })).toBeVisible();
-  await expect(
-    drafts.getByText('“Fresh fruit delivered to your door.” → “Fruit, delivered.”'),
-  ).toBeVisible();
+  await expectTextChange(drafts, 'Fresh fruit delivered to your door.', 'Fruit, delivered.');
 
   await editText(page, '#tagline', 'Fresh fruit delivered to your door.');
   await expect(panel.getByRole('heading', { name: 'Drafts (0)' })).toBeVisible();
@@ -182,7 +188,7 @@ test('comments made after a route change are filed under the new route', async (
 
   const drafts = panel.getByRole('region', { name: 'Drafts' });
   for (const path of ['/spa.html#/home', '/spa.html#/settings', '/pushed/a']) {
-    await expect(drafts.getByRole('heading', { name: path, exact: true })).toBeVisible();
+    await expect(drafts.getByRole('link', { name: `localhost:4173${path}`, exact: true })).toBeVisible();
   }
   await expect(page.locator('[data-vf-pin="draft"]')).toHaveCount(1);
 
@@ -212,7 +218,7 @@ test('a page restored from the back/forward cache reconnects to the panel', asyn
   // Guards the test itself: the page really came out of the cache rather than reloading.
   await expect(page.locator('html')).toHaveAttribute('data-restored', 'true');
 
-  await expect(panel.getByText('demo-project · build-001')).toBeVisible();
+  await expectConnected(panel);
   await setMode(panel, 'Select');
   await pinComment(page, '#title', 'Still works');
   await expect(page.locator('[data-vf-pin="draft"]')).toHaveCount(1);
@@ -238,9 +244,37 @@ test('a click picks the highlighted element after the keyboard moved the selecti
   await page.locator('#tagline').hover();
   await panel.keyboard.press('ArrowUp');
   await panel.keyboard.press('ArrowDown');
-  await expect(page.locator('.vf-highlight__label')).toHaveText('h1 · src/pages/Home.tsx:12');
+  await expect(page.locator('.vf-highlight__label')).toHaveText('h1 src/pages/Home.tsx:12');
 
   await pinComment(page, '#tagline', 'About the headline');
-  const drafts = panel.getByRole('region', { name: 'Drafts' });
-  await expect(drafts.getByText('Element · src/pages/Home.tsx:12')).toBeVisible();
+  await expect(panel.getByRole('region', { name: 'Drafts' }).getByText('About the headline')).toBeVisible();
+  const stored = await worker.evaluate(async () => {
+    const { drafts } = await chrome.storage.local.get('drafts');
+    return (drafts as Record<string, Array<{ anchor?: { source?: string } }>>)['demo-project'];
+  });
+  expect(stored?.map((draft) => draft.anchor?.source)).toEqual(['src/pages/Home.tsx:12']);
+});
+
+test('sent feedback can be resolved and reopened, and stays after a reload', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  const { page, panel } = await openReview(context, worker, extensionId);
+  await setMode(panel, 'Select');
+  await pinComment(page, '#title', 'Shorter headline');
+  await panel.getByRole('button', { name: 'Send 1' }).click();
+
+  const sent = panel.getByRole('region', { name: 'Sent' });
+  await expect(page.locator('[data-vf-pin="sent"]')).toHaveCount(1);
+  await sent.getByRole('button', { name: 'Resolve' }).click();
+  await expect(sent.getByLabel('Resolved')).toBeVisible();
+  await expect(page.locator('[data-vf-pin]')).toHaveCount(0);
+
+  await page.reload();
+  await expect(sent.getByText('Shorter headline')).toBeVisible();
+  await expect(sent.getByLabel('Resolved')).toBeVisible();
+
+  await sent.getByRole('button', { name: 'Reopen' }).click();
+  await expect(page.locator('[data-vf-pin="sent"]')).toHaveText('1');
 });

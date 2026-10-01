@@ -4,7 +4,9 @@ import { createShadowRootUi, defineContentScript } from '#imports';
 import { App } from '@/components/App';
 
 export default defineContentScript({
-  matches: ['*://*.web.app/*', '*://*.firebaseapp.com/*', 'http://localhost/*'],
+  // Every web page, while REQUIRE_PREVIEW_MARKERS is off. The UI stays idle until the side
+  // panel connects.
+  matches: ['http://*/*', 'https://*/*'],
   cssInjectionMode: 'ui',
 
   async main(ctx) {

@@ -1,24 +1,40 @@
+/*
+ * Saigon Technology palette: brand green on warm ink, stone greys, white paper.
+ * Green is kept for the things that are yours to act on: drafts and Send.
+ */
 :root {
   color-scheme: light dark;
+  --ink: #1c1917;
+  --ink-deep: #0c0a09;
+  --green: #8dc63f;
+  --green-hover: #9bd34c;
+  --green-text: #4a7318;
   --bg: #ffffff;
-  --fg: #1c1c1e;
-  --muted: #6b7280;
-  --line: #e4e4e7;
-  --surface: #f4f4f5;
-  --accent: #2f6fed;
-  --draft: #f08c00;
-  --danger: #c92a2a;
+  --surface: #fafaf9;
+  --line: #e7e5e4;
+  --fg: #1c1917;
+  --muted: #625d58;
+  --faint: #a6a09b;
+  --danger: #b42318;
+  --wash: rgba(141, 198, 63, 0.22);
+  --control: #1c1917;
+  --on-control: #ffffff;
+  --sent: #1c1917;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #18181b;
-    --fg: #f4f4f5;
-    --muted: #a1a1aa;
-    --line: #3f3f46;
-    --surface: #27272a;
-    --accent: #6c9bff;
-    --danger: #ff8787;
+    --bg: #0c0a09;
+    --surface: #1c1917;
+    --line: #35302c;
+    --fg: #fafaf9;
+    --muted: #a6a09b;
+    --faint: #78716c;
+    --green-text: #8dc63f;
+    --danger: #ff9389;
+    --control: #fafaf9;
+    --on-control: #0c0a09;
+    --sent: #57514b;
   }
 }
 
@@ -28,7 +44,7 @@
 
 body {
   margin: 0;
-  font: 13px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font: 14px/1.45 Barlow, system-ui, -apple-system, 'Segoe UI', sans-serif;
   color: var(--fg);
   background: var(--bg);
 }
@@ -37,27 +53,11 @@ h1,
 h2,
 h3,
 p,
-ul {
+ul,
+dl,
+dd {
   margin: 0;
   padding: 0;
-}
-
-h1 {
-  font-size: 14px;
-}
-
-h2 {
-  margin: 16px 0 6px;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-
-h3 {
-  margin: 8px 0 4px;
-  font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: var(--muted);
 }
 
 ul {
@@ -65,66 +65,107 @@ ul {
 }
 
 button,
-textarea {
+textarea,
+input {
   font: inherit;
   color: inherit;
 }
 
+:focus-visible {
+  outline: 2px solid var(--green-text);
+  outline-offset: 2px;
+}
+
+/* Buttons */
+
 button {
-  padding: 4px 10px;
-  background: var(--surface);
+  padding: 5px 12px;
+  font-weight: 500;
+  background: var(--bg);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
 }
 
+button:hover:not(:disabled) {
+  background: var(--surface);
+}
+
 button:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
 button.primary {
-  color: #fff;
-  background: var(--accent);
-  border-color: var(--accent);
+  font-weight: 600;
+  color: var(--ink-deep);
+  background: var(--green);
+  border-color: var(--green);
 }
 
-button.danger {
-  color: var(--danger);
+button.primary:hover:not(:disabled) {
+  background: var(--green-hover);
+  border-color: var(--green-hover);
 }
 
 button.link {
   padding: 0;
-  color: var(--accent);
+  font-weight: 500;
+  color: var(--green-text);
   background: none;
   border: none;
   text-decoration: underline;
 }
 
 textarea {
+  display: block;
   width: 100%;
-  min-height: 64px;
-  padding: 6px 8px;
+  min-height: 68px;
+  padding: 7px 9px;
   resize: vertical;
   background: var(--bg);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 8px;
 }
+
+/* Layout */
 
 .panel {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  padding: 12px;
 }
 
+.panel__body {
+  flex: 1;
+  padding: 0 16px 16px;
+}
+
+/* Header: always ink, like the company's own site header. */
+
 .header {
+  padding: 14px 16px;
+  color: #fafaf9;
+  background: var(--ink);
+}
+
+.header__brand {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 8px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--line);
+  align-items: center;
+  gap: 10px;
+}
+
+.header__mark {
+  flex: none;
+  height: 26px;
+  color: #ffffff;
+}
+
+.header h1 {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 .header__actions {
@@ -133,86 +174,128 @@ textarea {
   gap: 6px;
 }
 
+.header__actions button {
+  color: #fafaf9;
+  background: transparent;
+  border-color: #57514b;
+}
+
+.header__actions button:hover:not(:disabled) {
+  background: #292524;
+}
+
+.header :focus-visible {
+  outline-color: var(--green);
+}
+
 .tag {
-  padding: 1px 6px;
+  padding: 1px 8px;
   font-size: 11px;
-  color: var(--muted);
-  border: 1px solid var(--line);
+  color: #a6a09b;
+  border: 1px solid #57514b;
   border-radius: 999px;
 }
 
-.muted {
-  color: var(--muted);
-}
+/* Messages */
 
 .notice,
 .error {
-  margin-top: 10px;
-  padding: 8px 10px;
+  margin-top: 14px;
+  padding: 10px 12px;
   background: var(--surface);
-  border-radius: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
 }
 
 .error {
   color: var(--danger);
 }
 
+.muted {
+  color: var(--muted);
+}
+
+.empty {
+  padding: 4px 0 2px;
+  color: var(--muted);
+}
+
+/* Mode switch */
+
 .toolbar {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 14px;
 }
 
 .segmented {
   display: flex;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .segmented button {
+  padding: 5px 14px;
+  border: none;
   border-radius: 0;
-  margin-left: -1px;
 }
 
-.segmented button:first-child {
-  margin-left: 0;
-  border-radius: 6px 0 0 6px;
-}
-
-.segmented button:last-child {
-  border-radius: 0 6px 6px 0;
+.segmented button + button {
+  border-left: 1px solid var(--line);
 }
 
 .segmented button[aria-pressed='true'] {
-  color: #fff;
-  background: var(--accent);
-  border-color: var(--accent);
+  font-weight: 600;
+  color: var(--on-control);
+  background: var(--control);
+}
+
+.segmented button:focus-visible {
+  outline-offset: -2px;
 }
 
 .page-comment {
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
-.lists {
-  flex: 1;
+/* Lists */
+
+h2 {
+  margin: 22px 0 4px;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .row {
-  padding: 8px 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 8px;
+  align-items: start;
+  padding: 12px 0;
   border-bottom: 1px solid var(--line);
 }
 
-.row--resolved {
-  opacity: 0.55;
+.row--resolved .row__body {
+  color: var(--muted);
 }
 
 .row__main {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
   padding: 0;
+  font-weight: 400;
   text-align: left;
   background: none;
   border: none;
+  border-radius: 4px;
+}
+
+.row__main:hover:not(:disabled) {
+  background: none;
 }
 
 .row__main:disabled {
@@ -227,19 +310,105 @@ textarea {
   min-width: 0;
 }
 
-.row__meta {
-  font-size: 11px;
+.row__link {
+  grid-column: 1 / -1;
+  justify-self: start;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 32px);
+  margin: 6px 0 0 32px;
+  font-size: 12px;
   color: var(--muted);
+  text-decoration: none;
+  border-radius: 2px;
+}
+
+.row__link span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row__link .icon {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: var(--faint);
+}
+
+.row__link:hover,
+.row__link:hover .icon {
+  color: var(--fg);
+}
+
+.row__link:hover span {
+  text-decoration: underline;
+}
+
+.row__tools {
+  display: flex;
+  gap: 2px;
+  margin-top: -3px;
+}
+
+.icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.icon-button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--muted);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+
+.icon-button:hover:not(:disabled) {
+  color: var(--fg);
+  background: var(--surface);
+  border-color: var(--line);
+}
+
+.icon-button--danger:hover:not(:disabled) {
+  color: var(--danger);
+}
+
+.icon-button--confirm:hover:not(:disabled) {
+  color: var(--green-text);
+  background: var(--wash);
+  border-color: transparent;
+}
+
+.row__comment,
+.row__edit {
   overflow-wrap: anywhere;
 }
 
-.row__edit,
-.row__comment {
-  overflow-wrap: anywhere;
+.row__edit del {
+  display: block;
+  color: var(--muted);
+}
+
+.row__edit ins {
+  padding: 0 3px;
+  text-decoration: none;
+  background: var(--wash);
+  border-radius: 3px;
+}
+
+.row__edit em {
+  color: var(--muted);
 }
 
 .row__warning {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--danger);
 }
 
@@ -247,37 +416,81 @@ textarea {
   display: flex;
   justify-content: flex-end;
   gap: 6px;
-  margin-top: 6px;
+  margin-top: 8px;
 }
 
 .row__editor {
-  margin-top: 6px;
+  grid-column: 1 / -1;
+  margin: 8px 0 0 32px;
 }
 
+/*
+ * Number tags share their shape with the pins on the page: a square with one corner cut,
+ * echoing the angled strokes of the company mark.
+ */
 .badge {
   flex: none;
-  width: 20px;
-  height: 20px;
-  font: 600 11px/20px system-ui, sans-serif;
-  text-align: center;
-  color: #fff;
-  background: var(--draft);
-  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink-deep);
+  background: var(--green);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 34% 100%, 0 66%);
 }
 
 .badge--sent {
-  background: #6b7280;
+  color: #ffffff;
+  background: var(--sent);
 }
+
+/* Resolved feedback keeps its place in the list but loses its number: it has no pin. */
+.badge--resolved {
+  color: var(--green-text);
+  background: var(--wash);
+}
+
+.badge--resolved .icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* A comment with no pin on the page. */
+.badge--blank,
+.badge:empty {
+  background: var(--line);
+}
+
+/* Footer */
 
 .footer {
   position: sticky;
   bottom: 0;
-  padding-top: 10px;
+  padding: 12px 16px 14px;
   background: var(--bg);
+  border-top: 1px solid var(--line);
+}
+
+.footer .error {
+  margin: 0 0 10px;
+}
+
+.footer .muted {
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.footer__buttons {
+  display: flex;
+  gap: 8px;
 }
 
 .footer__send {
-  width: 100%;
-  margin-top: 8px;
-  padding: 8px;
+  flex: 1;
+  padding: 9px;
+  font-size: 15px;
 }

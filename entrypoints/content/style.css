@@ -1,106 +1,156 @@
+/*
+ * On-page UI. Colours are Saigon Technology's: brand green #8dc63f on warm ink #1c1917.
+ * The surface stays light whatever the page looks like, so comments are always readable.
+ */
 .vf-root {
-  font: 13px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif;
-  color: #1c1c1e;
+  font: 13px/1.4 Barlow, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: #1c1917;
 }
 
 .vf-highlight {
   position: fixed;
   pointer-events: none;
   box-sizing: border-box;
-  border: 2px solid #2f6fed;
-  background: rgba(47, 111, 237, 0.1);
-  border-radius: 2px;
+  border: 2px solid #8dc63f;
+  /* A dark hairline keeps the green edge visible on pale and on green pages. */
+  outline: 1px solid rgba(12, 10, 9, 0.45);
+  background: rgba(141, 198, 63, 0.16);
 }
 
 .vf-highlight--selected {
-  border-color: #f08c00;
-  background: rgba(240, 140, 0, 0.1);
+  border-color: #1c1917;
+  outline-color: rgba(255, 255, 255, 0.85);
+  background: rgba(141, 198, 63, 0.1);
 }
 
 .vf-highlight--edit {
   border-style: dashed;
-  border-color: #12924f;
   background: transparent;
 }
 
 .vf-highlight__label {
   position: absolute;
   left: -2px;
-  bottom: 100%;
+  bottom: calc(100% + 1px);
   max-width: 60vw;
-  padding: 2px 6px;
+  padding: 2px 7px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 11px;
-  color: #fff;
-  background: #2f6fed;
-  border-radius: 3px 3px 0 0;
+  color: #fafaf9;
+  background: #1c1917;
 }
 
-.vf-highlight--edit .vf-highlight__label {
-  background: #12924f;
+.vf-highlight__label b {
+  font-weight: 600;
+  color: #8dc63f;
 }
 
+/*
+ * Pins are tags with one corner cut, echoing the angled strokes of the company mark. The
+ * cut corner points at the element the pin belongs to.
+ */
 .vf-pin {
   position: fixed;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   padding: 0;
-  border: 2px solid #fff;
-  border-radius: 50%;
-  font: 600 11px/1 system-ui, sans-serif;
-  color: #fff;
-  background: #f08c00;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  border: 0;
+  background: none;
   cursor: pointer;
+  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.9)) drop-shadow(0 1px 2px rgba(12, 10, 9, 0.5));
+  transition: transform 0.15s ease-out;
+}
+
+.vf-pin__shape {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  font: 600 12px/1 Barlow, system-ui, sans-serif;
+  color: #0c0a09;
+  background: #8dc63f;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 34% 100%, 0 66%);
 }
 
 .vf-pin--sent {
-  background: #6b7280;
   cursor: default;
 }
 
+.vf-pin--sent .vf-pin__shape {
+  color: #ffffff;
+  background: #1c1917;
+}
+
 .vf-pin--focused {
-  outline: 3px solid rgba(47, 111, 237, 0.6);
-  transform: scale(1.25);
+  transform: scale(1.35);
+  filter: drop-shadow(0 0 5px #8dc63f) drop-shadow(0 1px 2px rgba(12, 10, 9, 0.5));
+}
+
+.vf-pin:focus-visible {
+  outline: 2px solid #1c1917;
+  outline-offset: 2px;
 }
 
 .vf-popover {
   position: fixed;
   box-sizing: border-box;
   width: 320px;
-  padding: 12px;
+  padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  background: #fff;
-  border: 1px solid #d4d4d8;
-  border-radius: 8px;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+  gap: 10px;
+  color: #1c1917;
+  background: #ffffff;
+  border: 1px solid #d6d3d1;
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(12, 10, 9, 0.28);
 }
 
 .vf-popover__title {
+  font-size: 14px;
   font-weight: 600;
 }
 
 .vf-popover__detail {
-  font-size: 12px;
-  color: #52525b;
+  font-size: 13px;
   overflow-wrap: anywhere;
+}
+
+.vf-popover__detail del {
+  display: block;
+  color: #78716c;
+}
+
+.vf-popover__detail ins {
+  padding: 0 3px;
+  text-decoration: none;
+  background: rgba(141, 198, 63, 0.28);
+  border-radius: 3px;
+}
+
+.vf-popover__detail em {
+  color: #78716c;
 }
 
 .vf-popover__input {
   box-sizing: border-box;
   width: 100%;
   height: 84px;
-  padding: 6px 8px;
+  padding: 7px 9px;
   resize: none;
   font: inherit;
   color: inherit;
-  background: #fff;
-  border: 1px solid #d4d4d8;
-  border-radius: 6px;
+  background: #ffffff;
+  border: 1px solid #d6d3d1;
+  border-radius: 8px;
+}
+
+.vf-popover__input:focus-visible,
+.vf-button:focus-visible {
+  outline: 2px solid #78b032;
+  outline-offset: 1px;
 }
 
 .vf-popover__actions {
@@ -113,26 +163,45 @@
 }
 
 .vf-button {
-  padding: 5px 12px;
+  padding: 6px 14px;
   font: inherit;
-  color: #1c1c1e;
-  background: #f4f4f5;
-  border: 1px solid #d4d4d8;
-  border-radius: 6px;
+  font-weight: 500;
+  color: #1c1917;
+  background: #ffffff;
+  border: 1px solid #d6d3d1;
+  border-radius: 8px;
   cursor: pointer;
 }
 
+.vf-button:hover {
+  background: #fafaf9;
+}
+
 .vf-button--primary {
-  color: #fff;
-  background: #2f6fed;
-  border-color: #2f6fed;
+  font-weight: 600;
+  color: #0c0a09;
+  background: #8dc63f;
+  border-color: #8dc63f;
+}
+
+.vf-button--primary:hover {
+  background: #9bd34c;
 }
 
 .vf-button--primary:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
 .vf-button--danger {
-  color: #c92a2a;
+  padding-inline: 4px;
+  color: #b42318;
+  background: none;
+  border-color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-pin {
+    transition: none;
+  }
 }

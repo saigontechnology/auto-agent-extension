@@ -1,5 +1,6 @@
 import type { ClientInfo, SentFeedback } from '../types';
 import { ApiError, type FeedbackApi, UnauthorizedError } from './feedback-api';
+import { feedbackPayload } from './feedback-payload';
 
 export type HttpFeedbackApiDeps = {
   apiBase: string;
@@ -83,21 +84,12 @@ export function createHttpFeedbackApi(deps: HttpFeedbackApiDeps): FeedbackApi {
     return data as SentFeedback[];
   }
 
-  const feedbackUrl = (projectId: string) =>
-    `${deps.apiBase}/projects/${encodeURIComponent(projectId)}/feedback`;
-
   return {
     submit(projectId, items) {
-      return request(feedbackUrl(projectId), {
+      return request(`${deps.apiBase}/projects/${encodeURIComponent(projectId)}/feedback`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items, client: deps.client }),
-      });
-    },
-
-    list(projectId, path) {
-      return request(`${feedbackUrl(projectId)}?path=${encodeURIComponent(path)}`, {
-        method: 'GET',
+        body: JSON.stringify(feedbackPayload(items, deps.client)),
       });
     },
   };

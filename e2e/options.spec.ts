@@ -1,9 +1,13 @@
 import type { browser } from 'wxt/browser';
+import { LOCAL_ONLY } from '../lib/config';
 import { expect, test } from './fixtures';
 import { openReview } from './helpers';
 
 // Init scripts run inside the extension page, where `chrome` exists.
 declare const chrome: typeof browser;
+
+// These cover the API settings form, which is hidden while feedback is local only.
+test.skip(LOCAL_ONLY, 'API settings are turned off while LOCAL_ONLY is on');
 
 test('options refuse incomplete real-API settings and keep mock as the default', async ({
   context,

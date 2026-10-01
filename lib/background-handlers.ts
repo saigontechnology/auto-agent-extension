@@ -1,5 +1,6 @@
 import { type FeedbackApi, UnauthorizedError } from './api/feedback-api';
 import { listDrafts, removeDrafts } from './draft-store';
+import { saveFeedback } from './feedback-store';
 import type { AuthState, BackgroundRequest, Result } from './messages';
 import { isConfigured } from './settings-store';
 import type { Settings } from './types';
@@ -49,14 +50,13 @@ async function dispatch(request: BackgroundRequest, deps: HandlerDeps): Promise<
       await deps.signOut();
       return authState(deps);
 
-    case 'list':
-      return (await configuredApi(deps)).list(request.projectId, request.path);
-
     case 'submit': {
       const api = await configuredApi(deps);
       const drafts = await listDrafts(request.projectId);
       if (drafts.length === 0) return [];
       const sent = await api.submit(request.projectId, drafts);
+      // There is no API to read feedback back yet, so what was sent is kept in this browser.
+      await saveFeedback(request.projectId, sent);
       // Remove only what was sent: a draft added while the request was in flight must survive.
       await removeDrafts(
         request.projectId,

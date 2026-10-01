@@ -216,3 +216,15 @@ All extension UI on the page is mounted in one Shadow DOM root so page CSS and e
 - **Fixture** — `fixtures/demo` is a small preview page with both meta tags, elements with and without `data-vibe-source`, and a repeated list rendered from one source line.
 - **End-to-end smoke** — Playwright loads the built extension, opens the fixture, pins a comment, sends against the mock and checks the item appears as sent.
 - **Manual** — the same scenario on a real Firebase preview once the tool injects the markers.
+
+## 7. Temporary testing mode (added 2026-09-30)
+
+Until the tool injects the preview markers and the real API exists, the extension ships with two switches in `lib/config.ts` that relax sections 3.1, 4.4 and 4.5. Setting both back restores the behaviour described above.
+
+| Switch | Value now | Effect |
+|---|---|---|
+| `REQUIRE_PREVIEW_MARKERS` | `false` | Any page can be reviewed. A page without the meta tags uses `location.host` as the project and `local` as the build; markers still win when present. The content script matches every `http` and `https` page, and `host_permissions` is `http://*/*`, `https://*/*` (no optional host permissions). |
+| `LOCAL_ONLY` | `true` | Feedback is always stored in this browser through the mock API. The side panel shows no Options button, Mock tag or Sign in; the options page shows a notice instead of the form; the background ignores saved API settings. The API adapter and OAuth code stay in place, and their end-to-end tests are skipped while the switch is on. |
+
+Known cost: the content script, and its idle Shadow DOM host, are now present on every web page the reviewer opens, not only on preview builds.
+
