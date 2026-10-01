@@ -1,7 +1,7 @@
 # Workflow Recording — Design Spec
 
 Date: 2026-10-01
-Status: draft, awaiting review
+Status: approved 2026-10-01; amended the same day while writing the implementation plan (types location, start via the content script, no `left` step for pages the extension cannot see, untitled auto-saved drafts, form-field labels)
 Builds on: `2026-09-30-vibe-feedback-extension-design.md` (the "v1 spec"), which listed multi-step flow recording as out of scope
 
 ## 1. Purpose
@@ -87,7 +87,7 @@ type FlowStep = { id: string; at: string; path: string } & (
   - `load`: a new document from a link, form or typed URL.
   - `reload`: the page was reloaded.
   - `history`: back/forward, including restores from the back/forward cache.
-- `left` means the tab moved to a page outside the recorded project, or to a page the extension cannot run on. Recording is paused from that point until the tab returns to the project.
+- `left` means the tab moved to a page outside the recorded project (another host, or a page that is not a preview build). Recording is paused from that point until the tab returns to the project. Pages the extension cannot see at all (`chrome://`, the Web Store) produce no step: without the `tabs` permission the background is not told their URL, so the recording simply has a gap until the tab returns.
 - `network.status` is `null` for a request that failed without a response (network error, CORS, abort).
 - `count` records how many times an identical console or network step repeated back to back. Repeats are merged into one step instead of being appended.
 - A workflow holds at most 300 steps. `message` and `stack` are truncated to 2000 characters each.
@@ -111,8 +111,11 @@ New files:
 
 ```
 entrypoints/flow-probe.content.ts   main-world script: console, errors, fetch, XHR
-lib/flow/types.ts                   Flow, FlowStep, Recording
-lib/flow/steps.ts                   appendStep: merging and the step limit (pure)
+lib/types.ts                        Flow, FlowStep (part of the contract, next to FeedbackItem)
+lib/flow/types.ts                   Recording, RecordingState, FlowEdits
+lib/flow/steps.ts                   addStep: merging and the step limit (pure)
+lib/flow/flow-item.ts               builds flow drafts from a recording or edits; isSendable
+lib/flow/flow-handlers.ts           background message and tab-event handling
 lib/flow/step-label.ts              human-readable label for a step (pure)
 lib/flow/probe-events.ts            normalises probe events into steps (pure)
 lib/flow/recording-store.ts         per-tab recording state machine (background)
@@ -125,13 +128,13 @@ entrypoints/panel/FlowSteps.tsx     step list shared by the bar, the review scre
 
 ### 4.1 Units
 
-**`steps`.** `appendStep(steps, step): { steps, limitReached }`.
+**`steps`.** `addStep(steps, step): { steps, limitReached }`.
 - An `input` step for the same element as the last step replaces the last step's value and keeps its id. Elements are compared by `anchor.selector`.
 - A `console` or `network` step identical to the last step increments `count` instead of being appended. Console steps match on `source` and `message`; network steps match on `method`, `url` and `status`.
 - When the list already holds 300 steps, the new step is dropped and `limitReached` is true.
 
 **`step-label`.** `stepLabel(step): { text: string; source?: string }`.
-- Elements are named by `aria-label`, then visible text (40 characters), then `anchor.selector`.
+- Elements are named by `aria-label`; for `input`, `select` and `textarea` then by `placeholder` and `name`; then by visible text (40 characters); and otherwise by `anchor.selector`.
 - `source` is `anchor.source ?? anchor.nearestSource`.
 - Labels are for the UI only and are not sent.
 
@@ -165,7 +168,7 @@ Operations: `start`, `append`, `pause`, `resume`, `stop`, `discard`, `get`, `wat
 **`capture`.** Active only while the background reports the tab as recording. It listens on `document` in the capture phase:
 - `click` → a `click` step.
 - `change` on `select` → a `select` step. On a checkbox or radio → a `check` step.
-- `input` on text fields and `contenteditable` → an `input` step with the current value. `appendStep` merges the keystrokes.
+- `input` on text fields and `contenteditable` → an `input` step with the current value. `addStep` merges the keystrokes.
 - `keydown` for Enter, Escape and Tab → a `key` step, with the focused element's anchor when there is one.
 
 It does not stop or alter any event. Events that originate inside the extension's Shadow DOM host or the panel iframe are ignored. Anchors come from `describeElement`.
@@ -180,14 +183,16 @@ The wrappers always call through to the originals and never change their results
 ### 4.2 Data flow
 
 **Panel → background** (`runtime.sendMessage`, added to `BackgroundRequest`):
-- `flow-start` with `tabId`, the page context the panel holds for that tab, and the viewport. The page context gives `projectId`, `buildId` and `startPage`.
 - `flow-pause`, `flow-resume`, `flow-stop`, `flow-discard`, each with `tabId`
 - `flow-note` with `tabId` and `text`
 - `flow-save` with `tabId`, `title`, `expected`, `actual`, `failedStepId` and the edited `steps`
 
 The panel watches `storage.session` directly for the live recording.
 
+**Panel → content** (port): `start-recording`. The content script answers by sending `flow-start` to the background, because it holds the page context and the page's viewport.
+
 **Content → background:**
+- `flow-start` carries the page context and the viewport. The background starts a recording, or returns the one the tab already has.
 - `flow-step` carries a step.
 - `flow-hello` is sent when the content script starts. It carries the page context and the navigation type from `performance.getEntriesByType('navigation')`. The background replies with whether the tab is recording.
 
@@ -201,9 +206,8 @@ The panel watches `storage.session` directly for the live recording.
 | New document in the same project | `flow-hello` → background appends `navigate` with cause `load`, `reload` or `history` |
 | New document in a different project | `flow-hello` → background appends `left` and pauses with reason `left` |
 | Back in the recorded project while paused with reason `left` | `flow-hello` → background resumes and appends `navigate` |
-| URL the content script cannot run on | `tabs.onUpdated` with a `url` change and no `flow-hello` → background appends `left` and pauses |
 | Tab opened from the recorded tab | `tabs.onCreated` with `openerTabId` equal to the recorded tab → `new-tab` step, URL from `pendingUrl` or the first `tabs.onUpdated` |
-| Recorded tab closed | Auto-save as a draft titled "Untitled workflow" |
+| Recorded tab closed | Auto-save as a draft with an empty title, shown as "Untitled workflow" (skipped when the recording has no steps) |
 
 Steps are stored in the order the background receives them. `at` comes from the sender's clock.
 
@@ -255,8 +259,8 @@ Opens on Stop, when the step limit is reached, and when a flow draft is clicked.
 | Step limit reached | Recording stops; the review screen opens with "Reached the 300-step limit" |
 | Service worker suspended mid-recording | State survives in `storage.session`; the next message wakes the worker and recording continues |
 | Browser closed during a recording | The recording is lost (`storage.session` is cleared). Accepted limitation |
-| Recorded tab closed while recording or reviewing | Saved as a draft titled "Untitled workflow" |
-| Content script cannot run on the new page | Background records `left` from `tabs.onUpdated` |
+| Recorded tab closed while recording or reviewing | Saved as a draft with an empty title, shown as "Untitled workflow"; it cannot be sent until it has a title |
+| Tab moves to a page the extension cannot see (`chrome://`, Web Store) | No step is recorded; recording continues when the tab returns to the project |
 | Submit fails or returns 401 | Existing behaviour from the v1 spec: drafts kept, Retry shown, token refresh |
 | A step's anchor cannot be resolved (hover or Go to) | Labelled "element not found"; nothing else happens |
 | Record pressed with a stopped, unsaved recording on the tab | Its review screen reopens |
