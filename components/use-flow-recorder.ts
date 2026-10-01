@@ -5,7 +5,7 @@ import { REQUIRE_PREVIEW_MARKERS } from '@/lib/config';
 import { currentEnv } from '@/lib/feedback-factory';
 import { CAPTURED_EVENTS, actionFromEvent, navigationCause } from '@/lib/flow/capture';
 import { probeAction, probeMessageFromEvent } from '@/lib/flow/probe-events';
-import { PROBE_TAG } from '@/lib/flow/probe-format';
+import { PROBE_READY_TAG, PROBE_TAG } from '@/lib/flow/probe-format';
 import { type RecordingState, isRecordingState } from '@/lib/flow/types';
 import { type FlowContentMessage, isFlowStatus } from '@/lib/messages';
 import { readPageContext, routePath } from '@/lib/page-context';
@@ -26,8 +26,9 @@ function makeStep(action: FlowAction): FlowStep {
 
 /**
  * Records the reviewer's actions on this page while the background says the tab is recording.
- * Errors the page reports before the background has answered are held back, so a recording
- * also catches what goes wrong while a page loads.
+ * The main-world probe holds the errors a page reports while it loads until this hook says it
+ * is listening; those, and anything else captured before the background has answered, are held
+ * here until that answer, so they land after the navigate step the background records first.
  */
 export function useFlowRecorder(ctx: ContentScriptContext, host: HTMLElement) {
   const [state, setState] = useState<RecordingState>(IDLE);
@@ -65,32 +66,41 @@ export function useFlowRecorder(ctx: ContentScriptContext, host: HTMLElement) {
     };
     hello(navigationCause(performance.getEntriesByType('navigation')[0]));
 
-    // A page restored from the back/forward cache keeps this script but is a new step.
+    // A page restored from the back/forward cache keeps this script but is a new step, and
+    // errors right after the restore must wait for it like they do on a load.
     const onPageShow = (event: PageTransitionEvent) => {
-      if (event.persisted) hello('history');
+      if (!event.persisted) return;
+      pendingRef.current = [];
+      hello('history');
     };
+    // After an extension reload this script lives on in the page but can no longer reach it.
     const onStatus = (message: unknown) => {
+      if (ctx.isInvalid) return;
       if (isFlowStatus(message)) setState(message.state);
     };
     const onProbe = (event: Event) => {
+      if (ctx.isInvalid) return;
       const message = probeMessageFromEvent(event);
       const action = message && probeAction(message.event);
       if (action) record(action);
     };
     window.addEventListener('pageshow', onPageShow);
     document.addEventListener(PROBE_TAG, onProbe);
+    // Lets the probe hand over what the page reported before this script was listening.
+    document.dispatchEvent(new CustomEvent(PROBE_READY_TAG));
     browser.runtime.onMessage.addListener(onStatus);
     return () => {
       window.removeEventListener('pageshow', onPageShow);
       document.removeEventListener(PROBE_TAG, onProbe);
       browser.runtime.onMessage.removeListener(onStatus);
     };
-  }, [record, sendStep]);
+  }, [ctx, record, sendStep]);
 
   // Listening on window in the capture phase sees events before the page can stop them.
   useEffect(() => {
     if (state.status !== 'recording') return;
     const onEvent = (event: Event) => {
+      if (ctx.isInvalid) return;
       const action = actionFromEvent(event, host);
       if (action) record(action);
     };
@@ -98,16 +108,16 @@ export function useFlowRecorder(ctx: ContentScriptContext, host: HTMLElement) {
     return () => {
       for (const type of CAPTURED_EVENTS) window.removeEventListener(type, onEvent, true);
     };
-  }, [state.status, host, record]);
+  }, [ctx, state.status, host, record]);
 
-  // Same-document route changes. The event fires before the new URL is committed, and also
-  // for a full page load (which the next page reports itself), so only a URL that has changed
-  // by the next task counts.
+  // Same-document route changes. The event fires before the new URL is committed, for a full
+  // page load (which the next page reports itself), and for replaceState and query-only changes,
+  // so only a route path that has changed by the next task counts.
   useEffect(() => {
     ctx.addEventListener(window, 'wxt:locationchange', () => {
-      const before = location.href;
+      const before = routePath(location);
       ctx.setTimeout(() => {
-        if (recordingRef.current && location.href !== before) {
+        if (recordingRef.current && routePath(location) !== before) {
           record({ type: 'navigate', url: location.href, cause: 'route' });
         }
       }, 0);

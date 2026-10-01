@@ -34,13 +34,15 @@ function Glyph({ d }: { d: string }) {
   );
 }
 
-type Props = { drafts: number; recording: boolean; onClose: () => void };
+/** `recordingSteps` is the step count of a recording in progress, or null when none is. */
+type Props = { drafts: number; recordingSteps: number | null; onClose: () => void };
 
 /**
  * The review panel as a window floating over the page, so the page keeps its own layout.
- * Its title bar moves it and folds it down to a small bar that shows the number of drafts.
+ * Its title bar moves it and folds it down to a small bar that shows the number of drafts
+ * and, while recording, the number of steps.
  */
-export function PanelFrame({ drafts, recording, onClose }: Props) {
+export function PanelFrame({ drafts, recordingSteps, onClose }: Props) {
   const [layout, setLayout] = useState<PanelLayout | null>(null);
   const [dragging, setDragging] = useState(false);
   const windowRef = useRef<HTMLElement | null>(null);
@@ -112,7 +114,12 @@ export function PanelFrame({ drafts, recording, onClose }: Props) {
         }}
       >
         <BrandMark className="vf-panel__mark" />
-        {recording && <span className="vf-panel__rec" role="img" aria-label="Recording" title="Recording" />}
+        {recordingSteps !== null && <span className="vf-panel__rec" role="img" aria-label="Recording" title="Recording" />}
+        {recordingSteps !== null && minimized && (
+          <span className="vf-panel__steps" aria-label={`${recordingSteps} steps recorded`}>
+            {recordingSteps}
+          </span>
+        )}
         <span className="vf-panel__title">Auto Agent</span>
         {minimized && drafts > 0 && (
           <span className="vf-panel__count" aria-label={`${drafts} ${drafts === 1 ? 'draft' : 'drafts'}`}>

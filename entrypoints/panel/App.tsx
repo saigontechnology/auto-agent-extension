@@ -65,9 +65,13 @@ export function App() {
   const recording = useRecording(tabId);
   const recordingActive = recording?.status === 'recording' || recording?.status === 'paused';
   const [flowError, setFlowError] = useState<string | null>(null);
+  // Set while a flow request is on its way, so a save or discard cannot be sent twice.
+  const [flowPending, setFlowPending] = useState(false);
   const flowRequest = (request: FlowRequest) => {
     setFlowError(null);
+    setFlowPending(true);
     void sendToBackground(request).then((result) => {
+      setFlowPending(false);
       if (!result.ok) setFlowError(result.error);
     });
   };
@@ -90,10 +94,30 @@ export function App() {
         notice={recording.limitReached ? `Reached the ${MAX_STEPS}-step limit, so recording stopped.` : undefined}
         cancelLabel="Discard"
         confirmCancel
+        busy={flowPending}
         missing={missingSteps}
         onHoverStep={hoverStep}
         onSave={(edits) => flowRequest({ type: 'flow-save', tabId: recording.tabId, edits })}
         onCancel={() => flowRequest({ type: 'flow-discard', tabId: recording.tabId })}
+      />
+    ) : null;
+
+  // Notes are pinned to the open page, or, away from the project, to where the recording was last.
+  const recordingBar =
+    recordingActive && recording ? (
+      <RecordingBar
+        recording={recording}
+        onPause={() => flowRequest({ type: 'flow-pause', tabId: recording.tabId })}
+        onResume={() => flowRequest({ type: 'flow-resume', tabId: recording.tabId })}
+        onStop={() => flowRequest({ type: 'flow-stop', tabId: recording.tabId })}
+        onNote={(text) =>
+          flowRequest({
+            type: 'flow-note',
+            tabId: recording.tabId,
+            text,
+            path: context?.path ?? recording.steps.at(-1)?.path ?? recording.startPage.path,
+          })
+        }
       />
     ) : null;
 
@@ -179,6 +203,19 @@ export function App() {
         <div className="panel__body">
           {flowError && <p className="error">{flowError}</p>}
           {review}
+        </div>
+      </div>
+    );
+  }
+
+  // A recording paused outside the project must still be reachable, or it could never be stopped.
+  if (!context && recordingBar) {
+    return (
+      <div className="panel">
+        {header}
+        <div className="panel__body">
+          {flowError && <p className="error">{flowError}</p>}
+          {recordingBar}
         </div>
       </div>
     );
@@ -275,15 +312,7 @@ export function App() {
 
         {flowError && <p className="error">{flowError}</p>}
 
-        {recordingActive && recording ? (
-          <RecordingBar
-            recording={recording}
-            onPause={() => flowRequest({ type: 'flow-pause', tabId: recording.tabId })}
-            onResume={() => flowRequest({ type: 'flow-resume', tabId: recording.tabId })}
-            onStop={() => flowRequest({ type: 'flow-stop', tabId: recording.tabId })}
-            onNote={(text) => flowRequest({ type: 'flow-note', tabId: recording.tabId, text, path: context.path })}
-          />
-        ) : (
+        {recordingBar ?? (
           <>
             <div className="toolbar">
               <div className="segmented" role="group" aria-label="Mode">
@@ -351,7 +380,8 @@ export function App() {
             </div>
             {drafts.length === 0 && (
               <p className="empty">
-                No drafts yet. Choose Select or Text above, then click something on the page.
+                No drafts yet. Choose Select or Text above, then click something on the page, or record a
+                workflow.
               </p>
             )}
             <ul>

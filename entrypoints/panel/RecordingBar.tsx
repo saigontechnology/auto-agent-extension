@@ -46,7 +46,7 @@ export function RecordingBar({ recording, onPause, onResume, onStop, onNote }: P
               Resume
             </button>
           )}
-          <button type="button" onClick={() => setNote('')}>
+          <button type="button" onClick={() => setNote((current) => current ?? '')}>
             Note
           </button>
           <button type="button" className="primary" onClick={onStop}>

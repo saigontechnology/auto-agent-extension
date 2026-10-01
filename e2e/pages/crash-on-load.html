@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Crash on load · Demo Shop</title>
+    <meta name="vibe:project-id" content="demo-project" />
+    <meta name="vibe:build-id" content="build-001" />
+  </head>
+  <body>
+    <h1>Crash on load</h1>
+    <script>
+      // Fails while the document is still being parsed, long before the content script runs.
+      console.error('Load error');
+      throw new Error('Load boom');
+    </script>
+  </body>
+</html>

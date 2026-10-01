@@ -173,9 +173,18 @@ export function App({ ctx, host }: Props) {
     [context, drafts, sent],
   );
 
-  const panel = panelOpen && <PanelFrame drafts={drafts.length} recording={recordingActive} onClose={closePanel} />;
+  const panel = panelOpen && (
+    <PanelFrame
+      key="panel-frame"
+      drafts={drafts.length}
+      recordingSteps={recordingActive ? recorder.state.steps : null}
+      onClose={closePanel}
+    />
+  );
 
   // The badge must stay outside `panel`: in a fragment with PanelFrame the panel iframe reloaded repeatedly.
+  // The key lets React match PanelFrame across both returns below, whatever its position, so
+  // switching between them never remounts the iframe.
   if (!connected || !context) {
     return (
       <div className="vf-root">

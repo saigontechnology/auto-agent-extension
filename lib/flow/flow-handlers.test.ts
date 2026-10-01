@@ -139,6 +139,35 @@ describe('flow handlers', () => {
     ).rejects.toThrow('no longer exists');
   });
 
+  it('saves a recording once when two saves race', async () => {
+    const { flow } = await started();
+    await flow.content({ type: 'flow-step', step: clickStep('c') }, TAB);
+    const edits = { title: 'Twice', expected: '', actual: '', steps: await steps() };
+    const results = await Promise.allSettled([
+      flow.request({ type: 'flow-save', tabId: TAB, edits }),
+      flow.request({ type: 'flow-save', tabId: TAB, edits }),
+    ]);
+    expect(results.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected']);
+    expect(results.find((result) => result.status === 'rejected')).toMatchObject({
+      reason: expect.objectContaining({ message: expect.stringContaining('no longer exists') }),
+    });
+    expect(await listDrafts('proj')).toHaveLength(1);
+    expect(await getRecording(TAB)).toBeNull();
+  });
+
+  it('keeps the recording when its draft cannot be stored', async () => {
+    const { flow } = await started();
+    await flow.content({ type: 'flow-step', step: clickStep('c') }, TAB);
+    await flow.request({ type: 'flow-stop', tabId: TAB });
+    const set = vi.spyOn(fakeBrowser.storage.local, 'set').mockRejectedValueOnce(new Error('Quota exceeded'));
+    await expect(
+      flow.request({ type: 'flow-save', tabId: TAB, edits: { title: 't', expected: '', actual: '', steps: await steps() } }),
+    ).rejects.toThrow('Quota exceeded');
+    set.mockRestore();
+    expect(await getRecording(TAB)).toMatchObject({ status: 'stopped', steps: [{ id: 'c' }] });
+    expect(await listDrafts('proj')).toEqual([]);
+  });
+
   it('discards a recording', async () => {
     const { flow } = await started();
     await flow.request({ type: 'flow-discard', tabId: TAB });

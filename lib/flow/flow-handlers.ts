@@ -5,6 +5,7 @@ import { flowItem } from './flow-item';
 import {
   getRecording,
   pauseRecording,
+  putRecording,
   recordStep,
   removeRecording,
   resumeRecording,
@@ -117,11 +118,17 @@ export function createFlowHandlers(deps: FlowDeps): FlowHandlers {
           report(tabId, await record(tabId, step({ type: 'note', text: request.text.trim() }, request.path)));
           return null;
         case 'flow-save': {
-          const recording = await getRecording(tabId);
+          // Taking the recording out first means a second save, or the tab closing meanwhile,
+          // finds nothing left to turn into a draft.
+          const recording = await removeRecording(tabId);
           if (!recording) throw new Error('This recording no longer exists.');
           const item = flowItem(recording, request.edits, { id: deps.newId(), now: deps.now() });
-          await addDraft(recording.projectId, item);
-          await removeRecording(tabId);
+          try {
+            await addDraft(recording.projectId, item);
+          } catch (error) {
+            await putRecording(recording);
+            throw error;
+          }
           report(tabId, null);
           return item;
         }

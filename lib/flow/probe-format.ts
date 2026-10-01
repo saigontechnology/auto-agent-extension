@@ -4,6 +4,10 @@
  */
 
 export const PROBE_TAG = 'vibe-flow-probe';
+/** Sent by the isolated content script once it listens, so the probe can hand over what it held. */
+export const PROBE_READY_TAG = 'vibe-flow-probe-ready';
+/** Reports the probe holds until the content script listens; later ones are dropped. */
+export const MAX_PROBE_BUFFER = 50;
 export const MAX_REPORT = 4000;
 
 export type ProbeEvent =

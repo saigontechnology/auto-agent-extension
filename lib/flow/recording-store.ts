@@ -66,7 +66,9 @@ export async function startRecording(input: StartInput): Promise<Recording> {
 
 export function recordStep(tabId: number, step: FlowStep, now: Date): Promise<Recording | null> {
   return mutate(tabId, (current) => {
-    if (current?.status !== 'recording') return current;
+    // A note comes from the reviewer, not the page, so it is kept while paused too.
+    const open = current?.status === 'recording' || (current?.status === 'paused' && step.type === 'note');
+    if (!current || !open) return current;
     const { steps, limitReached } = addStep(current.steps, step);
     if (!limitReached) return { ...current, steps };
     return { ...current, status: 'stopped', limitReached: true, endedAt: now.toISOString() };
@@ -93,6 +95,11 @@ export function stopRecording(tabId: number, now: Date): Promise<Recording | nul
     const { pausedReason: _reason, ...rest } = current;
     return { ...rest, status: 'stopped', endedAt: now.toISOString() };
   });
+}
+
+/** Puts a recording back into its tab, unless the tab has started another one meanwhile. */
+export function putRecording(recording: Recording): Promise<Recording | null> {
+  return mutate(recording.tabId, (current) => current ?? recording);
 }
 
 export async function removeRecording(tabId: number): Promise<Recording | null> {

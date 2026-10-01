@@ -11,6 +11,8 @@ type Props = {
   cancelLabel: string;
   /** Asks before cancelling, because cancelling throws the recording away. */
   confirmCancel: boolean;
+  /** True while a save or discard is on its way, so it cannot be sent twice. */
+  busy?: boolean;
   onHoverStep: (step: FlowStep | null) => void;
   onSave: (edits: FlowEdits) => void;
   onCancel: () => void;
@@ -23,6 +25,7 @@ export function FlowReview({
   missing,
   cancelLabel,
   confirmCancel,
+  busy = false,
   onHoverStep,
   onSave,
   onCancel,
@@ -56,7 +59,7 @@ export function FlowReview({
       aria-label="Review workflow"
       onSubmit={(event) => {
         event.preventDefault();
-        if (canSave) onSave({ ...edits, title: edits.title.trim() });
+        if (canSave && !busy) onSave({ ...edits, title: edits.title.trim() });
       }}
     >
       <h2>{heading}</h2>
@@ -106,17 +109,17 @@ export function FlowReview({
             <button type="button" onClick={() => setConfirming(false)}>
               Keep
             </button>
-            <button type="button" className="danger" onClick={onCancel}>
+            <button type="button" className="danger" disabled={busy} onClick={onCancel}>
               Discard
             </button>
           </div>
         </div>
       ) : (
         <div className="review__actions">
-          <button type="button" onClick={() => (confirmCancel ? setConfirming(true) : onCancel())}>
+          <button type="button" disabled={busy} onClick={() => (confirmCancel ? setConfirming(true) : onCancel())}>
             {cancelLabel}
           </button>
-          <button type="submit" className="primary" disabled={!canSave}>
+          <button type="submit" className="primary" disabled={!canSave || busy}>
             Save draft
           </button>
         </div>

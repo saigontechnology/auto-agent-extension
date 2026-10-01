@@ -5,7 +5,7 @@ import { MAX_MESSAGE } from './steps';
 
 const SOURCES: ReadonlySet<string> = new Set(['error', 'exception', 'rejection']);
 
-/** Checks a `message` event's data, which any script on the page could have posted. */
+/** Checks a probe CustomEvent's parsed detail, which any script on the page could have dispatched. */
 export function isProbeMessage(data: unknown): data is ProbeMessage {
   const message = data as Partial<ProbeMessage> | null;
   if (typeof message !== 'object' || message === null || message.tag !== PROBE_TAG) return false;

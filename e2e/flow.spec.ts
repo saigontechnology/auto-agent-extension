@@ -1,7 +1,7 @@
 import type { Worker } from '@playwright/test';
 import type { browser } from 'wxt/browser';
 import { expect, test } from './fixtures';
-import { openReview } from './helpers';
+import { FIXTURE, openReview } from './helpers';
 
 // `worker.evaluate` callbacks run inside the extension's service worker, where `chrome` exists.
 declare const chrome: typeof browser;
@@ -56,6 +56,23 @@ test('a recording captures entries, clicks, errors and page changes', async ({
   await expect(page.getByRole('status')).toContainText('REC');
 });
 
+test('errors a page raises while it loads are recorded after its navigate step', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  const { page, panel } = await openReview(context, worker, extensionId, 'flow.html');
+  await panel.getByRole('button', { name: 'Record workflow' }).click();
+  await expect(page.getByRole('status')).toContainText('REC');
+
+  await page.goto(FIXTURE + 'crash-on-load.html');
+  await expect.poll(async () => (await storedTypes(worker)).slice(-3)).toEqual(['navigate', 'console', 'console']);
+  const steps = (await storedRecording(worker))!.steps.slice(-3);
+  expect(steps[0]).toMatchObject({ path: '/crash-on-load.html' });
+  expect(steps[1]).toMatchObject({ message: 'Load error' });
+  expect(steps[2]).toMatchObject({ message: 'Error: Load boom' });
+});
+
 test('picking stays off while recording', async ({ context, worker, extensionId }) => {
   const { page, panel } = await openReview(context, worker, extensionId, 'flow.html');
   await panel.getByRole('button', { name: 'Record workflow' }).click();
@@ -84,10 +101,17 @@ test('the panel lists steps live, takes notes, pauses and stops', async ({ conte
   await bar.getByRole('button', { name: 'Pause' }).click();
   await expect(page.getByRole('status')).toContainText('Paused');
   await page.locator('#password').fill('hunter2');
+  // Notes come from the reviewer, so they are kept while paused; reopening the form keeps the text.
+  await bar.getByRole('button', { name: 'Note', exact: true }).click();
+  await bar.getByRole('textbox', { name: 'Note' }).fill('Paused here');
+  await bar.getByRole('button', { name: 'Note', exact: true }).click();
+  await expect(bar.getByRole('textbox', { name: 'Note' })).toHaveValue('Paused here');
+  await bar.getByRole('button', { name: 'Add note' }).click();
+  await expect(bar.getByText('Note: Paused here')).toBeVisible();
   await bar.getByRole('button', { name: 'Resume' }).click();
   await expect(page.getByRole('status')).toContainText('REC');
   await expect(bar.getByText(/hunter2/)).toHaveCount(0);
-  await expect(bar).toContainText('2 steps');
+  await expect(bar).toContainText('3 steps');
 
   await bar.getByRole('button', { name: 'Stop' }).click();
   await expect(bar).toHaveCount(0);
@@ -220,11 +244,17 @@ test('route changes in a hash-routed app are recorded as steps', async ({
   await expect(page.locator('#heading')).toHaveText('Settings');
   await page.locator('#push').click();
   await expect(page.locator('#heading')).toHaveText('Pushed');
-  await panel.getByRole('region', { name: 'Recording' }).getByRole('button', { name: 'Stop' }).click();
+  // Rewriting the query of the same route is not a new step.
+  await page.evaluate(() => history.replaceState(null, '', location.pathname + '?q=1'));
+  // A later step is listed only after anything recorded before it, so the check below is not early.
+  await page.locator('#heading').click();
+  const bar = panel.getByRole('region', { name: 'Recording' });
+  await expect(bar.getByText('Click h1 "Pushed"')).toBeVisible();
+  await bar.getByRole('button', { name: 'Stop' }).click();
 
   const review = panel.getByRole('form', { name: 'Review workflow' });
   await expect(review.getByText('Go to /spa.html#/settings')).toBeVisible();
-  await expect(review.getByText('Go to /pushed/a')).toBeVisible();
+  await expect(review.getByText('Go to /pushed/a')).toHaveCount(1);
 });
 
 test('Go to opens the page of a step on another page and highlights its element', async ({

@@ -4,7 +4,7 @@ import { isSendable } from '@/lib/flow/flow-item';
 import { flowSummary } from '@/lib/flow/step-label';
 import type { FeedbackItem } from '@/lib/types';
 import { Checkbox } from './Checkbox';
-import { IconButton } from './icons';
+import { Icon, IconButton } from './icons';
 import { PageLink } from './PageLink';
 
 type Props = {
@@ -46,7 +46,13 @@ export function DraftRow({
         onChange={onInclude}
       />
       <button type="button" className="row__main" onClick={onFocus} disabled={!onFocus}>
-        <span className={number === undefined ? 'badge badge--blank' : 'badge'}>{number}</span>
+        {flow ? (
+          <span className="badge badge--flow" aria-label="Workflow">
+            <Icon name="workflow" />
+          </span>
+        ) : (
+          <span className={number === undefined ? 'badge badge--blank' : 'badge'}>{number}</span>
+        )}
         <span className="row__body">
           {flow ? (
             <>

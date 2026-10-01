@@ -1,6 +1,8 @@
 import { defineContentScript } from '#imports';
 import {
+  MAX_PROBE_BUFFER,
   MAX_REPORT,
+  PROBE_READY_TAG,
   PROBE_TAG,
   type ProbeEvent,
   type ProbeMessage,
@@ -17,6 +19,9 @@ import {
  *
  * Events are reported via CustomEvent dispatched to the document. A string detail crosses
  * from the page's world to the extension's isolated world; objects do not.
+ *
+ * The isolated content script only starts listening once the document has loaded, and events
+ * are not queued, so reports are held here until it says it is ready.
  */
 export default defineContentScript({
   matches: ['http://*/*', 'https://*/*'],
@@ -24,10 +29,29 @@ export default defineContentScript({
   runAt: 'document_start',
 
   main() {
+    const dispatch = (message: ProbeMessage) => {
+      document.dispatchEvent(new CustomEvent(PROBE_TAG, { detail: JSON.stringify(message) }));
+    };
+
+    let ready = false;
+    let held: ProbeMessage[] = [];
+    document.addEventListener(PROBE_READY_TAG, () => {
+      try {
+        if (ready) return;
+        ready = true;
+        const messages = held;
+        held = [];
+        messages.forEach(dispatch);
+      } catch {
+        // Never let reporting break the page.
+      }
+    });
+
     const report = (event: ProbeEvent) => {
       try {
         const message: ProbeMessage = { tag: PROBE_TAG, event };
-        document.dispatchEvent(new CustomEvent(PROBE_TAG, { detail: JSON.stringify(message) }));
+        if (ready) dispatch(message);
+        else if (held.length < MAX_PROBE_BUFFER) held.push(message);
       } catch {
         // Never let reporting break the page.
       }

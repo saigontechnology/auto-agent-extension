@@ -5,6 +5,7 @@ import type { PageContext } from '../types';
 import {
   getRecording,
   pauseRecording,
+  putRecording,
   recordStep,
   removeRecording,
   resumeRecording,
@@ -66,6 +67,17 @@ describe('recording-store', () => {
     expect((await getRecording(1))?.steps.map((s) => s.id)).toEqual(['a', 'b']);
   });
 
+  it('takes notes while paused, but no other step', async () => {
+    await start();
+    await pauseRecording(1, 'user');
+    await recordStep(1, clickStep('paused'), now);
+    await recordStep(1, { id: 'note', at: now.toISOString(), path: '/login', type: 'note', text: 'Slow' }, now);
+    expect((await getRecording(1))?.steps.map((s) => s.id)).toEqual(['note']);
+    await stopRecording(1, later);
+    await recordStep(1, { id: 'late', at: now.toISOString(), path: '/login', type: 'note', text: 'Late' }, now);
+    expect((await getRecording(1))?.steps.map((s) => s.id)).toEqual(['note']);
+  });
+
   it('keeps every step when many arrive at once', async () => {
     await start();
     await Promise.all(Array.from({ length: 20 }, (_, i) => recordStep(1, clickStep(`s${i}`), now)));
@@ -103,6 +115,17 @@ describe('recording-store', () => {
     expect(await removeRecording(1)).toMatchObject({ tabId: 1 });
     expect(await getRecording(1)).toBeNull();
     expect(await removeRecording(1)).toBeNull();
+  });
+
+  it('puts a recording back only into a tab that has none', async () => {
+    const recording = await start();
+    expect(await removeRecording(1)).toEqual(recording);
+    expect(await putRecording(recording)).toEqual(recording);
+    expect(await getRecording(1)).toEqual(recording);
+
+    await stopRecording(1, later);
+    expect(await putRecording(recording)).toMatchObject({ status: 'stopped' });
+    expect((await getRecording(1))?.status).toBe('stopped');
   });
 
   it('notifies watchers of their own tab only', async () => {

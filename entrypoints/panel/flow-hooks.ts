@@ -73,12 +73,20 @@ export function useGoTo(
         send({ type: 'show-anchor', key: step.id, anchor, scroll: true });
         return;
       }
+      // The step's path comes from the server, so it must not lead the tab off the item's site.
+      let target: URL;
+      try {
+        target = new URL(step.path, item.page.url);
+        if (target.origin !== new URL(item.page.url).origin) return;
+      } catch {
+        return;
+      }
       const key = String(tabId);
       void goToItem
         .getValue()
         .then(async (all) => {
           await goToItem.setValue({ ...all, [key]: { path: step.path, key: step.id, anchor } });
-          await browser.tabs.update(tabId, { url: new URL(step.path, item.page.url).href });
+          await browser.tabs.update(tabId, { url: target.href });
         })
         .catch(async () => {
           // A request left behind would fire on some later visit to that path.

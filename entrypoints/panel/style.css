@@ -550,6 +550,17 @@ h2 {
   height: 14px;
 }
 
+/* A workflow has no single pin on the page, so its tag shows what it is instead of a number. */
+.badge--flow {
+  color: var(--green-text);
+  background: var(--wash);
+}
+
+.badge--flow .icon {
+  width: 14px;
+  height: 14px;
+}
+
 /* A comment with no pin on the page. */
 .badge--blank,
 .badge:empty {

@@ -373,6 +373,13 @@
   flex: none;
 }
 
+.vf-panel__steps {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
 @keyframes vf-rec-pulse {
   50% {
     opacity: 0.35;

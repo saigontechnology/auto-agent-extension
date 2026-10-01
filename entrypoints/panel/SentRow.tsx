@@ -29,6 +29,10 @@ export function SentRow({ item, number, missing, onFocus, onResolve, onReopen, o
           <span className="badge badge--resolved" aria-label="Resolved">
             <Icon name="resolve" />
           </span>
+        ) : flow ? (
+          <span className="badge badge--flow" aria-label="Workflow">
+            <Icon name="workflow" />
+          </span>
         ) : (
           <span className="badge badge--sent">{number}</span>
         )}
