@@ -73,10 +73,22 @@ export function useGoTo(
         send({ type: 'show-anchor', key: step.id, anchor, scroll: true });
         return;
       }
-      void goToItem.getValue().then(async (all) => {
-        await goToItem.setValue({ ...all, [String(tabId)]: { path: step.path, key: step.id, anchor } });
-        await browser.tabs.update(tabId, { url: new URL(step.path, item.page.url).href });
-      });
+      const key = String(tabId);
+      void goToItem
+        .getValue()
+        .then(async (all) => {
+          await goToItem.setValue({ ...all, [key]: { path: step.path, key: step.id, anchor } });
+          await browser.tabs.update(tabId, { url: new URL(step.path, item.page.url).href });
+        })
+        .catch(async () => {
+          // A request left behind would fire on some later visit to that path.
+          try {
+            const { [key]: _failed, ...rest } = await goToItem.getValue();
+            await goToItem.setValue(rest);
+          } catch {
+            // Nothing more to do; the entry is only a pending hint.
+          }
+        });
     },
     [tabId, context, send],
   );

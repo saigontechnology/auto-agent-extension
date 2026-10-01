@@ -226,3 +226,70 @@ test('route changes in a hash-routed app are recorded as steps', async ({
   await expect(review.getByText('Go to /spa.html#/settings')).toBeVisible();
   await expect(review.getByText('Go to /pushed/a')).toBeVisible();
 });
+
+test('Go to opens the page of a step on another page and highlights its element', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  const { page, panel } = await openReview(context, worker, extensionId, 'flow.html');
+  await panel.getByRole('button', { name: 'Record workflow' }).click();
+  await page.locator('#email').fill('ada@example.com');
+  await page.locator('#about-link').click();
+  await expect(page).toHaveTitle('About · Demo Shop');
+  await page.locator('h1').click();
+  await page.goBack({ waitUntil: 'commit' });
+  await expect(page).toHaveTitle('Sign in · Demo Shop');
+  await panel.getByRole('button', { name: 'Stop' }).click();
+
+  const review = panel.getByRole('form', { name: 'Review workflow' });
+  await review.getByLabel('Title').fill('Cross page');
+  await review.getByRole('button', { name: 'Save draft' }).click();
+  await panel.getByRole('button', { name: 'Send 1 draft' }).click();
+
+  const sent = panel.getByRole('region', { name: 'Sent' });
+  await sent.getByRole('button', { name: 'Show steps' }).click();
+  await sent
+    .getByRole('listitem')
+    .filter({ hasText: 'Click h1 "About us"' })
+    // The sent row is a listitem too and contains the step, so take the innermost match.
+    .last()
+    .getByRole('button', { name: 'Go to' })
+    .click();
+  await expect(page).toHaveTitle('About · Demo Shop');
+  await expect(page.locator('.vf-highlight')).toHaveCount(1);
+  await expect
+    .poll(() =>
+      worker.evaluate(async () => {
+        const { 'go-to': pending } = await chrome.storage.session.get('go-to');
+        return Object.keys((pending ?? {}) as object);
+      }),
+    )
+    .toEqual([]);
+});
+
+test('a step whose element is gone from the page is marked as not found', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  const { page, panel } = await openReview(context, worker, extensionId, 'flow.html');
+  await panel.getByRole('button', { name: 'Record workflow' }).click();
+  await page.locator('#email').fill('ada@example.com');
+  await panel.getByRole('button', { name: 'Stop' }).click();
+
+  const review = panel.getByRole('form', { name: 'Review workflow' });
+  await review.getByLabel('Title').fill('Vanishing field');
+  await review.getByRole('button', { name: 'Save draft' }).click();
+  await panel.getByRole('button', { name: 'Send 1 draft' }).click();
+
+  const sent = panel.getByRole('region', { name: 'Sent' });
+  await sent.getByRole('button', { name: 'Show steps' }).click();
+  await page.evaluate(() => document.getElementById('email')?.remove());
+  const step = sent
+    .getByRole('listitem')
+    .filter({ hasText: 'Type "ada@example.com" into input "Email"' })
+    .last();
+  await step.getByRole('button', { name: 'Go to' }).click();
+  await expect(step.getByText('element not found')).toBeVisible();
+});
