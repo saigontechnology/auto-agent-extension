@@ -4,7 +4,14 @@ import { createMockFeedbackApi } from '@/lib/api/mock-feedback-api';
 import { type OAuthDeps, getAccessToken, isSignedIn, signIn, signOut } from '@/lib/auth/oauth';
 import { type HandlerDeps, handleRequest } from '@/lib/background-handlers';
 import { clientInfo } from '@/lib/client-info';
-import { type SetPanel, isBackgroundRequest, isPanelState } from '@/lib/messages';
+import { createFlowHandlers } from '@/lib/flow/flow-handlers';
+import {
+  type FlowStatus,
+  type SetPanel,
+  isBackgroundRequest,
+  isFlowContentMessage,
+  isPanelState,
+} from '@/lib/messages';
 import { LOCAL_ONLY } from '@/lib/config';
 import { DEFAULT_SETTINGS, getSettings } from '@/lib/settings-store';
 import type { Settings } from '@/lib/types';
@@ -26,7 +33,25 @@ export default defineBackground(() => {
     return run;
   };
 
-  browser.tabs.onRemoved.addListener((tabId) => void setPanelOpen(tabId, false));
+  const flow = createFlowHandlers({
+    now: () => new Date(),
+    newId: () => crypto.randomUUID(),
+    notify: (tabId, state) => {
+      const message: FlowStatus = { type: 'flow-status', state };
+      // The tab may be between documents; its next content script asks for the state itself.
+      browser.tabs.sendMessage(tabId, message).catch(() => undefined);
+    },
+  });
+
+  browser.tabs.onRemoved.addListener((tabId) => {
+    void setPanelOpen(tabId, false);
+    void flow.tabRemoved(tabId);
+  });
+  browser.tabs.onCreated.addListener((tab) => void flow.tabCreated(tab));
+  // Host permissions reveal http and https URLs, which is all a new tab's step needs.
+  browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    if (changeInfo.url) void flow.tabUpdated(tabId, changeInfo.url);
+  });
 
   browser.action.onClicked.addListener(async (tab) => {
     if (tab.id === undefined) return;
@@ -77,6 +102,7 @@ export default defineBackground(() => {
     signIn: (settings) => signIn(oauthDeps(settings)),
     signOut,
     isSignedIn,
+    flow,
   };
 
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -87,6 +113,12 @@ export default defineBackground(() => {
       update
         .then(() => openPanels.getValue())
         .then((tabs) => sendResponse(tabs.includes(tabId)));
+      return true;
+    }
+    if (isFlowContentMessage(message)) {
+      const tabId = sender.tab?.id;
+      if (tabId === undefined) return;
+      flow.content(message, tabId).then(sendResponse);
       return true;
     }
     if (!isBackgroundRequest(message)) return;

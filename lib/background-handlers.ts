@@ -1,6 +1,7 @@
 import { type FeedbackApi, UnauthorizedError } from './api/feedback-api';
 import { listDrafts, removeDrafts } from './draft-store';
 import { saveFeedback } from './feedback-store';
+import type { FlowHandlers } from './flow/flow-handlers';
 import { isSendable } from './flow/flow-item';
 import type { AuthState, BackgroundRequest, Result } from './messages';
 import { isConfigured } from './settings-store';
@@ -12,6 +13,7 @@ export type HandlerDeps = {
   signIn: (settings: Settings) => Promise<void>;
   signOut: () => Promise<void>;
   isSignedIn: () => Promise<boolean>;
+  flow: FlowHandlers;
 };
 
 class NotConfiguredError extends Error {
@@ -50,6 +52,14 @@ async function dispatch(request: BackgroundRequest, deps: HandlerDeps): Promise<
     case 'sign-out':
       await deps.signOut();
       return authState(deps);
+
+    case 'flow-pause':
+    case 'flow-resume':
+    case 'flow-stop':
+    case 'flow-discard':
+    case 'flow-note':
+    case 'flow-save':
+      return deps.flow.request(request);
 
     case 'submit': {
       const api = await configuredApi(deps);

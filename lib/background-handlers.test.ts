@@ -4,6 +4,7 @@ import { ApiError, type FeedbackApi, UnauthorizedError } from './api/feedback-ap
 import { createMockFeedbackApi } from './api/mock-feedback-api';
 import { type HandlerDeps, handleRequest } from './background-handlers';
 import { addDraft, listDrafts } from './draft-store';
+import { createFlowHandlers } from './flow/flow-handlers';
 import { listFeedback } from './feedback-store';
 import { isBackgroundRequest } from './messages';
 import { DEFAULT_SETTINGS } from './settings-store';
@@ -28,6 +29,11 @@ function makeDeps(overrides: Partial<HandlerDeps> = {}): HandlerDeps {
     signIn: vi.fn(async () => undefined),
     signOut: vi.fn(async () => undefined),
     isSignedIn: vi.fn(async () => false),
+    flow: createFlowHandlers({
+      now: () => new Date('2026-10-01T00:00:00.000Z'),
+      newId: () => crypto.randomUUID(),
+      notify: () => undefined,
+    }),
     ...overrides,
   };
 }
@@ -43,6 +49,15 @@ function failingApi(error: Error): FeedbackApi {
 describe('handleRequest', () => {
   beforeEach(() => {
     fakeBrowser.reset();
+  });
+
+  it('wraps flow request failures in a Result', async () => {
+    const result = await handleRequest(
+      { type: 'flow-save', tabId: 3, edits: { title: 't', expected: '', actual: '', steps: [] } },
+      makeDeps(),
+    );
+    expect(result).toEqual({ ok: false, code: 'failed', error: 'This recording no longer exists.' });
+    expect(isBackgroundRequest({ type: 'flow-note', tabId: 1, text: 'x', path: '/' })).toBe(true);
   });
 
   it('submits every draft of the project and clears them', async () => {
