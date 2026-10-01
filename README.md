@@ -50,6 +50,14 @@ defined at the top of `entrypoints/panel/style.css` and `entrypoints/content/sty
 3. Review the drafts in the panel, untick any you want to hold back, then press **Send**.
    Only ticked drafts are sent; the others stay as drafts. Sent feedback can be resolved and
    reopened; **Export JSON** saves the ticked drafts as the body the feedback API will receive.
+4. To report a problem that takes several steps, press **Record workflow** and use the page
+   as usual. Clicks, typing (values are recorded as typed, so use test data), choices, page
+   changes, console errors and failed requests are listed live in the panel. **Note** adds a
+   remark at that point, **Pause** stops listening, and leaving the preview pauses recording
+   until you come back. **Stop** opens the review: give it a title, say what you expected and
+   what happened, flag the step where it goes wrong, and remove any stray steps. The workflow
+   then waits with your other drafts. Closing the tab while recording keeps the steps as an
+   untitled draft, which needs a title before it can be sent.
 
 `Esc` leaves the current mode. In Select mode, `↑` and `↓` move to the parent or first child.
 

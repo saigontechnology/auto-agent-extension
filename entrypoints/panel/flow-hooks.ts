@@ -1,6 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { browser } from 'wxt/browser';
+import { storage } from '#imports';
 import { getRecording, watchRecording } from '@/lib/flow/recording-store';
+import { stepAnchor } from '@/lib/flow/step-label';
 import type { Recording } from '@/lib/flow/types';
+import type { PanelToContent } from '@/lib/messages';
+import type { Anchor, FlowStep, PageContext, SentFeedback } from '@/lib/types';
 
 /** The recording of the tab this panel reviews, kept up to date as steps arrive. */
 export function useRecording(tabId: number | null): Recording | null {
@@ -33,4 +38,46 @@ export function useNow(intervalMs: number): number {
     return () => clearInterval(timer);
   }, [intervalMs]);
   return now;
+}
+
+type PendingGoTo = { path: string; key: string; anchor: Anchor };
+
+/**
+ * A step to show once its page has loaded. The embedded panel is a new page after a full
+ * navigation, so the request waits in session storage rather than in memory.
+ */
+const goToItem = storage.defineItem<Record<string, PendingGoTo>>('session:go-to', { fallback: {} });
+
+export function useGoTo(
+  tabId: number | null,
+  context: PageContext | null,
+  send: (message: PanelToContent) => void,
+): (item: SentFeedback, step: FlowStep) => void {
+  useEffect(() => {
+    if (tabId === null || !context) return;
+    void goToItem.getValue().then(async (all) => {
+      const key = String(tabId);
+      const pending = all[key];
+      if (!pending || pending.path !== context.path) return;
+      const { [key]: _done, ...rest } = all;
+      await goToItem.setValue(rest);
+      send({ type: 'show-anchor', key: pending.key, anchor: pending.anchor, scroll: true });
+    });
+  }, [tabId, context, send]);
+
+  return useCallback(
+    (item: SentFeedback, step: FlowStep) => {
+      const anchor = stepAnchor(step);
+      if (tabId === null || !context || !anchor) return;
+      if (step.path === context.path) {
+        send({ type: 'show-anchor', key: step.id, anchor, scroll: true });
+        return;
+      }
+      void goToItem.getValue().then(async (all) => {
+        await goToItem.setValue({ ...all, [String(tabId)]: { path: step.path, key: step.id, anchor } });
+        await browser.tabs.update(tabId, { url: new URL(step.path, item.page.url).href });
+      });
+    },
+    [tabId, context, send],
+  );
 }

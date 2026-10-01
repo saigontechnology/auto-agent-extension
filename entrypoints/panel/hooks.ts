@@ -60,6 +60,7 @@ export type PanelConnection = {
   context: PageContext | null;
   mode: Mode;
   unresolved: string[];
+  missingAnchors: string[];
   send: (message: PanelToContent) => void;
   setMode: (mode: Mode) => void;
 };
@@ -70,6 +71,7 @@ export function usePanelConnection(tabId: number | null): PanelConnection {
   const [context, setContext] = useState<PageContext | null>(null);
   const [mode, setModeState] = useState<Mode>('off');
   const [unresolved, setUnresolved] = useState<string[]>([]);
+  const [missingAnchors, setMissingAnchors] = useState<string[]>([]);
   const [attempt, setAttempt] = useState(0);
   const portRef = useRef<Browser.runtime.Port | null>(null);
   const modeRef = useRef<Mode>('off');
@@ -119,6 +121,8 @@ export function usePanelConnection(tabId: number | null): PanelConnection {
         setModeState(message.mode);
       } else if (message.type === 'unresolved') {
         setUnresolved(message.ids);
+      } else if (message.type === 'anchor-missing') {
+        setMissingAnchors((current) => (current.includes(message.key) ? current : [...current, message.key]));
       }
     });
 
@@ -126,6 +130,7 @@ export function usePanelConnection(tabId: number | null): PanelConnection {
       if (portRef.current === port) portRef.current = null;
       setContext(null);
       setUnresolved([]);
+      setMissingAnchors([]);
     };
     port.onDisconnect.addListener(() => {
       // Reading lastError marks "no content script on this page" as handled.
@@ -153,7 +158,7 @@ export function usePanelConnection(tabId: number | null): PanelConnection {
     };
   }, [tabId, attempt]);
 
-  return { status, context, mode, unresolved, send, setMode };
+  return { status, context, mode, unresolved, missingAnchors, send, setMode };
 }
 
 export function useDrafts(projectId: string | undefined): FeedbackItem[] {

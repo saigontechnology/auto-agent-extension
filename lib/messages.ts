@@ -1,5 +1,6 @@
 import type { FlowEdits, RecordingState } from './flow/types';
 import type {
+  Anchor,
   FeedbackItem,
   FlowStep,
   Mode,
@@ -20,12 +21,15 @@ export type PanelToContent =
   | { type: 'focus-item'; id: string }
   | { type: 'create-page-comment'; comment: string }
   | { type: 'start-recording' }
+  /** Highlights a workflow step's element; `scroll` also brings it into view for a moment. */
+  | { type: 'show-anchor'; key: string; anchor: Anchor | null; scroll: boolean }
   | { type: 'set-sent'; items: SentFeedback[] };
 
 export type ContentToPanel =
   | { type: 'context'; context: PageContext | null }
   | { type: 'mode'; mode: Mode }
-  | { type: 'unresolved'; ids: string[] };
+  | { type: 'unresolved'; ids: string[] }
+  | { type: 'anchor-missing'; key: string };
 
 /** Broadcast by a content script when it starts, so an open review panel can connect to it. */
 export type ContentReady = { type: 'content-ready' };

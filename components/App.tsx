@@ -16,6 +16,7 @@ import { HighlightBox } from './HighlightBox';
 import { PanelFrame } from './PanelFrame';
 import { Picker, type RemoteKey } from './Picker';
 import { type PinFocus, PinLayer } from './PinLayer';
+import { type ShownAnchor, StepHighlight } from './StepHighlight';
 import { TextEditor, type TextEditResult } from './TextEditor';
 import { RecordingBadge } from './RecordingBadge';
 import { useFlowRecorder } from './use-flow-recorder';
@@ -41,6 +42,7 @@ export function App({ ctx, host }: Props) {
   const [sent, setSent] = useState<SentFeedback[]>([]);
   const [composer, setComposer] = useState<Composer | null>(null);
   const [focus, setFocus] = useState<PinFocus | null>(null);
+  const [shown, setShown] = useState<ShownAnchor | null>(null);
   const [remoteKey, setRemoteKey] = useState<RemoteKey | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const contextRef = useRef(context);
@@ -79,6 +81,13 @@ export function App({ ctx, host }: Props) {
           setMode('off');
           recorder.start(withLiveTitle(current));
         }
+        break;
+      case 'show-anchor':
+        setShown(
+          message.anchor
+            ? { key: message.key, anchor: message.anchor, scroll: message.scroll, at: Date.now() }
+            : null,
+        );
         break;
       case 'create-page-comment':
         if (current) {
@@ -150,6 +159,7 @@ export function App({ ctx, host }: Props) {
     setMode('off');
     setComposer(null);
     setSent([]);
+    setShown(null);
   }, [connected]);
 
   useEffect(() => {
@@ -245,6 +255,14 @@ export function App({ ctx, host }: Props) {
         onUnresolved={(ids) => post({ type: 'unresolved', ids })}
         onOpen={openPin}
       />
+      {shown && (
+        <StepHighlight
+          key={shown.at}
+          shown={shown}
+          onMissing={(key) => post({ type: 'anchor-missing', key })}
+          onDone={() => setShown(null)}
+        />
+      )}
       {!composer && mode === 'select' && (
         <Picker
           host={host}

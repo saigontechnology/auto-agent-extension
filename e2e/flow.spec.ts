@@ -168,3 +168,61 @@ test('discarding asks first; closing the tab keeps an untitled draft that cannot
   await expect(drafts.getByText('Email field loses focus')).toBeVisible();
   await expect(second.panel.getByRole('button', { name: 'Send 1 draft' })).toBeEnabled();
 });
+
+test('steps highlight their element; a sent workflow lists its steps with Go to', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  const { page, panel } = await openReview(context, worker, extensionId, 'flow.html');
+  await panel.getByRole('button', { name: 'Record workflow' }).click();
+  await page.locator('#email').fill('ada@example.com');
+  await page.locator('#about-link').click();
+  await expect(page).toHaveTitle('About · Demo Shop');
+  // A back/forward cache restore fires no load event, so wait only for the commit.
+  await page.goBack({ waitUntil: 'commit' });
+  await expect(page).toHaveTitle('Sign in · Demo Shop');
+  await panel.getByRole('button', { name: 'Stop' }).click();
+
+  const review = panel.getByRole('form', { name: 'Review workflow' });
+  await review.getByText('Type "ada@example.com" into input "Email"').hover();
+  await expect(page.locator('.vf-highlight')).toHaveCount(1);
+  await review.getByLabel('Title').hover();
+  await expect(page.locator('.vf-highlight')).toHaveCount(0);
+
+  await review.getByLabel('Title').fill('Round trip');
+  await review.getByRole('button', { name: 'Save draft' }).click();
+  await panel.getByRole('button', { name: 'Send 1 draft' }).click();
+
+  const sent = panel.getByRole('region', { name: 'Sent' });
+  await sent.getByRole('button', { name: 'Show steps' }).click();
+  await expect(sent.getByText('Go to /about.html')).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await sent
+    .getByRole('listitem')
+    .filter({ hasText: 'Type "ada@example.com" into input "Email"' })
+    // The sent row is a listitem too and contains the step, so take the innermost match.
+    .last()
+    .getByRole('button', { name: 'Go to' })
+    .click();
+  await expect(page.locator('.vf-highlight')).toHaveCount(1);
+  await expect(page.locator('#email')).toBeInViewport();
+});
+
+test('route changes in a hash-routed app are recorded as steps', async ({
+  context,
+  worker,
+  extensionId,
+}) => {
+  const { page, panel } = await openReview(context, worker, extensionId, 'spa.html#/home');
+  await panel.getByRole('button', { name: 'Record workflow' }).click();
+  await page.locator('#to-settings').click();
+  await expect(page.locator('#heading')).toHaveText('Settings');
+  await page.locator('#push').click();
+  await expect(page.locator('#heading')).toHaveText('Pushed');
+  await panel.getByRole('region', { name: 'Recording' }).getByRole('button', { name: 'Stop' }).click();
+
+  const review = panel.getByRole('form', { name: 'Review workflow' });
+  await expect(review.getByText('Go to /spa.html#/settings')).toBeVisible();
+  await expect(review.getByText('Go to /pushed/a')).toBeVisible();
+});

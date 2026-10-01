@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { browser } from 'wxt/browser';
 import { BrandMark } from '@/components/BrandMark';
 import { flowEditsOf, flowPatch, isSendable } from '@/lib/flow/flow-item';
+import { stepAnchor } from '@/lib/flow/step-label';
 import { MAX_STEPS } from '@/lib/flow/steps';
 import { feedbackPayload } from '@/lib/api/feedback-payload';
 import { sendToBackground } from '@/lib/background-client';
@@ -16,7 +17,7 @@ import { Checkbox } from './Checkbox';
 import { DraftRow } from './DraftRow';
 import { FlowReview } from './FlowReview';
 import { RecordingBar } from './RecordingBar';
-import { useRecording } from './flow-hooks';
+import { useGoTo, useRecording } from './flow-hooks';
 import { SentRow } from './SentRow';
 import {
   type ConnectionStatus,
@@ -57,7 +58,7 @@ function downloadJson(filename: string, data: unknown): void {
 
 export function App() {
   const tabId = useTargetTab();
-  const { status, context, mode, unresolved, send, setMode } = usePanelConnection(tabId);
+  const { status, context, mode, unresolved, missingAnchors, send, setMode } = usePanelConnection(tabId);
   const drafts = useDrafts(context?.projectId);
   const auth = useAuth();
   const sent = useSent(context, send);
@@ -72,8 +73,13 @@ export function App() {
   };
 
   const [editingFlow, setEditingFlow] = useState<FeedbackItem | null>(null);
-  // Task 10 makes hovering a step highlight its element on the page.
-  const hoverStep = (_step: FlowStep | null) => undefined;
+  const missingSteps = useMemo(() => new Set(missingAnchors), [missingAnchors]);
+  const goTo = useGoTo(tabId, context, send);
+  // Only steps on the open page can be pointed at; anything else clears the highlight.
+  const hoverStep = (step: FlowStep | null) => {
+    const anchor = step && step.path === context?.path ? stepAnchor(step) : undefined;
+    send({ type: 'show-anchor', key: step?.id ?? '', anchor: anchor ?? null, scroll: false });
+  };
 
   const review =
     recording?.status === 'stopped' ? (
@@ -84,6 +90,7 @@ export function App() {
         notice={recording.limitReached ? `Reached the ${MAX_STEPS}-step limit, so recording stopped.` : undefined}
         cancelLabel="Discard"
         confirmCancel
+        missing={missingSteps}
         onHoverStep={hoverStep}
         onSave={(edits) => flowRequest({ type: 'flow-save', tabId: recording.tabId, edits })}
         onCancel={() => flowRequest({ type: 'flow-discard', tabId: recording.tabId })}
@@ -201,6 +208,7 @@ export function App() {
             initial={flowEditsOf(editingFlow)}
             cancelLabel="Cancel"
             confirmCancel={false}
+            missing={missingSteps}
             onHoverStep={hoverStep}
             onSave={(edits) => {
               void updateDraft(projectId, editingFlow.id, flowPatch(editingFlow, edits));
@@ -382,6 +390,8 @@ export function App() {
                   item={item}
                   number={numbers.get(item.id)}
                   missing={missing.has(item.id)}
+                  missingSteps={missingSteps}
+                  onGoTo={(step) => goTo(item, step)}
                   onFocus={
                     numbers.has(item.id)
                       ? () => send({ type: 'focus-item', id: item.id })
