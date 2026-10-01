@@ -1,7 +1,7 @@
 # Auto Agent Integration — Design Spec
 
 Date: 2026-10-01
-Status: approved in conversation 2026-10-01; awaiting review of this written spec
+Status: approved 2026-10-01
 Builds on: `2026-09-30-vibe-feedback-extension-design.md` (the "v1 spec") and `2026-10-01-workflow-recording-design.md`
 Source contract: `BROWSER_EXTENSION_INTEGRATION.md` from the Auto Agent team (the "integration guide"), plus responses read from the live API on 2026-10-01
 
@@ -37,7 +37,7 @@ Choosing a workflow type other than Update Feedback, attaching extra user files 
 
 ### Prerequisite outside this repo
 
-The extension ID `halobcdjpokedneejfmdjecjgdkejjdk` (fixed by the `key` in `wxt.config.ts`) must be in the server's `BROWSER_EXTENSION_IDS`. Until it is, the sign-in window ends on the Auto Agent web app instead of returning tokens.
+The extension ID `halobcdjpokedneejfmdjecjgdkejjdk` (fixed by the `key` in `wxt.config.ts`) must be in the server's `BROWSER_EXTENSION_IDS`. Done on the production server as of 2026-10-01. If the ID or the `key` ever changes, the sign-in window ends on the Auto Agent web app instead of returning tokens.
 
 ## 3. Contract with Auto Agent
 
