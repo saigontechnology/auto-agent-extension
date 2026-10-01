@@ -1,3 +1,4 @@
+import type { Session, User } from './auth/session';
 import type { Anchor, FeedbackItem, Flow, FlowStep, SentFeedback } from './types';
 
 export function makeItem(overrides: Partial<FeedbackItem> = {}): FeedbackItem {
@@ -96,4 +97,34 @@ export function makeFlowItem(overrides: Partial<FeedbackItem> = {}): FeedbackIte
     flow: makeFlow(),
     ...overrides,
   });
+}
+
+/** An unsigned JWT whose payload carries `exp`, which is all the extension reads. */
+export function makeJwt(expSeconds: number): string {
+  const encode = (value: object) =>
+    btoa(JSON.stringify(value)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({ sub: 'u1', exp: expSeconds })}.signature`;
+}
+
+export function makeUser(overrides: Partial<User> = {}): User {
+  return {
+    id: 'u1',
+    username: 'ada.l',
+    displayName: 'Ada Lovelace',
+    role: 'DEVELOPER',
+    allowedServices: ['DEMO_FEEDBACK'],
+    ...overrides,
+  };
+}
+
+/** A session valid until 2026-10-01T11:00:00Z. */
+export function makeSession(overrides: Partial<Session> = {}): Session {
+  const expiresAt = Date.parse('2026-10-01T11:00:00Z');
+  return {
+    accessToken: makeJwt(expiresAt / 1000),
+    refreshToken: 'refresh-1',
+    expiresAt,
+    user: makeUser(),
+    ...overrides,
+  };
 }

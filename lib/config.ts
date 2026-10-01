@@ -21,3 +21,10 @@ export const LOCAL_ONLY: boolean = true;
  * recorded. Existing workflow drafts and sent workflows are still listed.
  */
 export const WORKFLOW_RECORDING: boolean = false;
+
+/** Auto Agent's API. End-to-end tests build against a fake one through `WXT_API_BASE`. */
+export const API_BASE: string =
+  (import.meta.env.WXT_API_BASE as string | undefined) || 'https://vibe.saigontechnology.vn/api/v1';
+
+/** The Auto Agent web app; a run opens at `${WEB_BASE}/jobs/<id>`. */
+export const WEB_BASE: string = new URL(API_BASE).origin;
