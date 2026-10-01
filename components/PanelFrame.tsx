@@ -34,13 +34,13 @@ function Glyph({ d }: { d: string }) {
   );
 }
 
-type Props = { drafts: number; onClose: () => void };
+type Props = { drafts: number; recording: boolean; onClose: () => void };
 
 /**
  * The review panel as a window floating over the page, so the page keeps its own layout.
  * Its title bar moves it and folds it down to a small bar that shows the number of drafts.
  */
-export function PanelFrame({ drafts, onClose }: Props) {
+export function PanelFrame({ drafts, recording, onClose }: Props) {
   const [layout, setLayout] = useState<PanelLayout | null>(null);
   const [dragging, setDragging] = useState(false);
   const windowRef = useRef<HTMLElement | null>(null);
@@ -112,6 +112,7 @@ export function PanelFrame({ drafts, onClose }: Props) {
         }}
       >
         <BrandMark className="vf-panel__mark" />
+        {recording && <span className="vf-panel__rec" role="img" aria-label="Recording" title="Recording" />}
         <span className="vf-panel__title">Auto Agent</span>
         {minimized && drafts > 0 && (
           <span className="vf-panel__count" aria-label={`${drafts} ${drafts === 1 ? 'draft' : 'drafts'}`}>

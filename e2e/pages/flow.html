@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Sign in · Demo Shop</title>
+    <meta name="vibe:project-id" content="demo-project" />
+    <meta name="vibe:build-id" content="build-001" />
+    <style>
+      body { max-width: 720px; margin: 0 auto; padding: 16px 24px; font: 16px/1.5 system-ui, sans-serif; }
+      form { display: grid; gap: 8px; max-width: 320px; }
+    </style>
+  </head>
+  <body>
+    <h1 data-vibe-source="src/pages/Login.tsx:10">Sign in</h1>
+    <form id="login" data-vibe-source="src/pages/Login.tsx:20">
+      <input id="email" name="email" placeholder="Email" data-vibe-source="src/pages/Login.tsx:31" />
+      <input id="password" name="password" type="password" placeholder="Password" data-vibe-source="src/pages/Login.tsx:32" />
+      <select id="plan" name="plan" data-vibe-source="src/pages/Login.tsx:33">
+        <option value="free">Free</option>
+        <option value="pro">Pro</option>
+      </select>
+      <label><input id="remember" type="checkbox" data-vibe-source="src/pages/Login.tsx:34" /> Remember me</label>
+      <button id="submit" type="submit" data-vibe-source="src/pages/Login.tsx:48">Sign in</button>
+    </form>
+    <p><button id="crash" type="button" data-vibe-source="src/pages/Login.tsx:60">Crash</button></p>
+    <p><a id="about-link" href="./about.html">About</a></p>
+    <script>
+      document.getElementById('login').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const response = await fetch('/api/login', { method: 'POST' });
+        document.title = 'status ' + response.status;
+      });
+      document.getElementById('crash').addEventListener('click', () => {
+        console.error('About to crash');
+        throw new Error('Boom');
+      });
+    </script>
+  </body>
+</html>

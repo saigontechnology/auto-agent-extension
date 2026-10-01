@@ -335,3 +335,53 @@
     transition: none;
   }
 }
+
+/* Recording badge: top left, away from the floating panel and from pins on the right. */
+.vf-rec {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #fafaf9;
+  background: #1c1917;
+  border-radius: 999px;
+  box-shadow: 0 1px 4px rgba(12, 10, 9, 0.35);
+  pointer-events: none;
+}
+
+.vf-rec__dot,
+.vf-panel__rec {
+  width: 8px;
+  height: 8px;
+  background: #e5484d;
+  border-radius: 50%;
+  animation: vf-rec-pulse 1.4s ease-in-out infinite;
+}
+
+.vf-rec--paused .vf-rec__dot {
+  background: #a6a09b;
+  animation: none;
+}
+
+.vf-panel__rec {
+  flex: none;
+}
+
+@keyframes vf-rec-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-rec__dot,
+  .vf-panel__rec {
+    animation: none;
+  }
+}

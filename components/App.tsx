@@ -17,6 +17,8 @@ import { PanelFrame } from './PanelFrame';
 import { Picker, type RemoteKey } from './Picker';
 import { type PinFocus, PinLayer } from './PinLayer';
 import { TextEditor, type TextEditResult } from './TextEditor';
+import { RecordingBadge } from './RecordingBadge';
+import { useFlowRecorder } from './use-flow-recorder';
 import { usePanelPort } from './use-panel-port';
 
 type Composer =
@@ -43,13 +45,23 @@ export function App({ ctx, host }: Props) {
   const [panelOpen, setPanelOpen] = useState(false);
   const contextRef = useRef(context);
   contextRef.current = context;
+  const recorder = useFlowRecorder(ctx, host);
+  const recordingActive = recorder.state.status === 'recording' || recorder.state.status === 'paused';
+  const recordingRef = useRef(recordingActive);
+  recordingRef.current = recordingActive;
 
   const { connected, post } = usePanelPort((message) => {
     const current = contextRef.current;
     switch (message.type) {
       case 'set-mode':
         setComposer(null);
-        setMode(current ? message.mode : 'off');
+        // Picking swallows the page's clicks, so it stays off until the recording stops.
+        if (recordingRef.current && message.mode !== 'off') {
+          setMode('off');
+          post({ type: 'mode', mode: 'off' });
+        } else {
+          setMode(current ? message.mode : 'off');
+        }
         break;
       case 'key':
         setRemoteKey({ key: message.key, at: Date.now() });
@@ -59,6 +71,14 @@ export function App({ ctx, host }: Props) {
         break;
       case 'focus-item':
         setFocus({ id: message.id, at: Date.now() });
+        break;
+      case 'start-recording':
+        if (current) {
+          // Picking swallows the page's clicks, so a recording always runs with picking off.
+          setComposer(null);
+          setMode('off');
+          recorder.start(withLiveTitle(current));
+        }
         break;
       case 'create-page-comment':
         if (current) {
@@ -143,9 +163,17 @@ export function App({ ctx, host }: Props) {
     [context, drafts, sent],
   );
 
-  const panel = panelOpen && <PanelFrame drafts={drafts.length} onClose={closePanel} />;
+  const panel = panelOpen && <PanelFrame drafts={drafts.length} recording={recordingActive} onClose={closePanel} />;
 
-  if (!connected || !context) return <div className="vf-root">{panel}</div>;
+  // The badge must stay outside `panel`: in a fragment with PanelFrame the panel iframe reloaded repeatedly.
+  if (!connected || !context) {
+    return (
+      <div className="vf-root">
+        <RecordingBadge state={recorder.state} />
+        {panel}
+      </div>
+    );
+  }
 
   const exitMode = () => {
     setMode('off');
@@ -209,6 +237,7 @@ export function App({ ctx, host }: Props) {
 
   return (
     <div className="vf-root">
+      <RecordingBadge state={recorder.state} />
       {panel}
       <PinLayer
         pins={pins}

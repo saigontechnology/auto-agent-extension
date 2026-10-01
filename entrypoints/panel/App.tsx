@@ -170,6 +170,11 @@ export function App() {
     setPageComment(null);
   };
 
+  const startRecording = () => {
+    setMode('off');
+    send({ type: 'start-recording' });
+  };
+
   const sendLabel =
     chosen.length === 0
       ? 'Send drafts'
@@ -202,9 +207,14 @@ export function App() {
               </button>
             ))}
           </div>
-          <button type="button" onClick={() => setPageComment('')}>
-            Add page comment
-          </button>
+          <div className="toolbar__actions">
+            <button type="button" onClick={() => setPageComment('')}>
+              Add page comment
+            </button>
+            <button type="button" onClick={startRecording}>
+              Record workflow
+            </button>
+          </div>
         </div>
 
         {pageComment !== null && (

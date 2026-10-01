@@ -9,6 +9,11 @@ const port = Number(process.env.PORT ?? 4173);
 const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript' };
 
 createServer((request, response) => {
+  // Lets test pages make a request that fails.
+  if (request.url?.startsWith('/api/')) {
+    response.writeHead(500, { 'Content-Type': 'application/json' }).end('{"error":"boom"}');
+    return;
+  }
   const pathname = decodeURIComponent(new URL(request.url ?? '/', 'http://localhost').pathname);
   const relative = normalize(pathname === '/' ? '/index.html' : pathname);
   const file = join(root, relative);

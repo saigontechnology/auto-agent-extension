@@ -19,6 +19,7 @@ export type PanelToContent =
   | { type: 'key'; key: PickerKey }
   | { type: 'focus-item'; id: string }
   | { type: 'create-page-comment'; comment: string }
+  | { type: 'start-recording' }
   | { type: 'set-sent'; items: SentFeedback[] };
 
 export type ContentToPanel =
