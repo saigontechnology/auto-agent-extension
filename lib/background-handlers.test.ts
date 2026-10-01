@@ -7,7 +7,7 @@ import { addDraft, listDrafts } from './draft-store';
 import { listFeedback } from './feedback-store';
 import { isBackgroundRequest } from './messages';
 import { DEFAULT_SETTINGS } from './settings-store';
-import { makeItem } from './test-helpers';
+import { makeFlowItem, makeItem } from './test-helpers';
 import type { FeedbackItem, Settings } from './types';
 
 const real: Settings = {
@@ -211,6 +211,24 @@ describe('handleRequest', () => {
     const result = await handleRequest({ type: 'sign-out' }, deps);
     expect(deps.signOut).toHaveBeenCalled();
     expect(result).toMatchObject({ ok: true, value: { signedIn: false } });
+  });
+
+  it('never sends a workflow without a title, even when it is chosen', async () => {
+    await addDraft('p1', makeFlowItem({ id: 'untitled', comment: '' }));
+    await addDraft('p1', makeFlowItem({ id: 'titled' }));
+    const api: FeedbackApi = {
+      submit: vi.fn(async (_projectId: string, items: FeedbackItem[]) =>
+        items.map((item) => ({ ...item, author: { id: 'u', name: 'U' }, status: 'open' as const })),
+      ),
+    };
+
+    await handleRequest(
+      { type: 'submit', projectId: 'p1', ids: ['untitled', 'titled'] },
+      makeDeps({ createApi: () => api }),
+    );
+
+    expect(vi.mocked(api.submit).mock.calls[0]![1].map((item: FeedbackItem) => item.id)).toEqual(['titled']);
+    expect((await listDrafts('p1')).map((d) => d.id)).toEqual(['untitled']);
   });
 });
 

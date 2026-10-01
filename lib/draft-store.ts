@@ -2,7 +2,7 @@ import { storage } from '#imports';
 import type { FeedbackItem } from './types';
 
 type DraftMap = Record<string, FeedbackItem[]>;
-export type DraftPatch = Partial<Pick<FeedbackItem, 'comment' | 'textEdit'>>;
+export type DraftPatch = Partial<Pick<FeedbackItem, 'comment' | 'textEdit' | 'flow'>>;
 
 const draftsItem = storage.defineItem<DraftMap>('local:drafts', { fallback: {} });
 

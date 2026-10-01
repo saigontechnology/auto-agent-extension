@@ -19,6 +19,54 @@ function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
+function isStepAnchor(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isString(value.selector) &&
+    isString(value.tag) &&
+    isString(value.text) &&
+    isString(value.html)
+  );
+}
+
+/** Checks the fields the panel reads to label each step. */
+function isFlowStep(value: unknown): boolean {
+  if (!isRecord(value) || !isString(value.id) || !isString(value.path)) return false;
+  switch (value.type) {
+    case 'click':
+    case 'check':
+      return isStepAnchor(value.anchor);
+    case 'input':
+      return isStepAnchor(value.anchor) && isString(value.value);
+    case 'select':
+      return isStepAnchor(value.anchor) && isString(value.label);
+    case 'key':
+      return isString(value.key) && (value.anchor === undefined || isStepAnchor(value.anchor));
+    case 'navigate':
+    case 'left':
+    case 'new-tab':
+      return isString(value.url);
+    case 'note':
+      return isString(value.text);
+    case 'console':
+      return isString(value.source) && isString(value.message) && typeof value.count === 'number';
+    case 'network':
+      return isString(value.method) && isString(value.url) && typeof value.count === 'number';
+    default:
+      return false;
+  }
+}
+
+function isFlow(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isString(value.expected) &&
+    isString(value.actual) &&
+    Array.isArray(value.steps) &&
+    value.steps.every(isFlowStep)
+  );
+}
+
 /**
  * Checks the fields the extension reads from sent feedback, so a contract mismatch shows up
  * as an error message instead of crashing the review panel.
@@ -28,7 +76,11 @@ function isSentFeedback(value: unknown): boolean {
   const { page, author, anchor, textEdit } = value;
   return (
     isString(value.id) &&
-    (value.kind === 'element' || value.kind === 'text-edit' || value.kind === 'page') &&
+    (value.kind === 'element' ||
+      value.kind === 'text-edit' ||
+      value.kind === 'page' ||
+      value.kind === 'flow') &&
+    (value.kind !== 'flow' || isFlow(value.flow)) &&
     isString(value.comment) &&
     (value.status === 'open' || value.status === 'resolved') &&
     isRecord(page) &&

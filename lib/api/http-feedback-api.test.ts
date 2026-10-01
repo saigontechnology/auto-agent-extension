@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { makeItem, makeSent } from '../test-helpers';
+import { makeFlowItem, makeItem, makeSent } from '../test-helpers';
 import { ApiError, UnauthorizedError } from './feedback-api';
 import { type HttpFeedbackApiDeps, createHttpFeedbackApi } from './http-feedback-api';
 
@@ -127,5 +127,28 @@ describe('HttpFeedbackApi', () => {
     const textEdit = makeSent({ id: 't', kind: 'text-edit', textEdit: { before: 'a', after: 'b' } });
     const { api } = setup([json([pageComment, textEdit])]);
     expect((await api.submit('p1', [makeItem()])).map((item) => item.id)).toEqual(['p', 't']);
+  });
+
+  it('accepts workflows', async () => {
+    const flow = { ...makeFlowItem({ id: 'f' }), author: { id: 'u1', name: 'Ada' }, status: 'open' };
+    const { api } = setup([json([flow])]);
+    expect((await api.submit('p1', [makeFlowItem()])).map((item) => item.id)).toEqual(['f']);
+  });
+
+  it('rejects workflows whose steps the panel could not show', async () => {
+    const base = { ...makeFlowItem(), author: { id: 'u1', name: 'Ada' }, status: 'open' };
+    const flow = base.flow!;
+    const bad: unknown[] = [
+      { ...base, flow: undefined },
+      { ...base, flow: { ...flow, steps: 'none' } },
+      { ...base, flow: { ...flow, expected: 1 } },
+      { ...base, flow: { ...flow, steps: [{ id: 'x', path: '/', type: 'teleport' }] } },
+      { ...base, flow: { ...flow, steps: [{ id: 'x', path: '/', type: 'click' }] } },
+      { ...base, flow: { ...flow, steps: [{ id: 'x', path: '/', type: 'note' }] } },
+    ];
+    for (const item of bad) {
+      const { api } = setup([json([item])]);
+      await expect(api.submit('p1', [makeFlowItem()])).rejects.toThrow('unexpected response');
+    }
   });
 });

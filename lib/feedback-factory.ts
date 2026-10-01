@@ -1,4 +1,4 @@
-import type { Anchor, FeedbackItem, FeedbackKind, PageContext, Viewport } from './types';
+import type { Anchor, FeedbackItem, FeedbackKind, Flow, PageContext, Viewport } from './types';
 
 export type ItemInput = {
   kind: FeedbackKind;
@@ -6,6 +6,7 @@ export type ItemInput = {
   context: PageContext;
   anchor?: Anchor;
   textEdit?: { before: string; after: string };
+  flow?: Flow;
 };
 
 export type ItemEnv = { id: string; now: Date; viewport: Viewport };
@@ -28,6 +29,7 @@ export function createItem(input: ItemInput, env: ItemEnv): FeedbackItem {
     page: { url: context.url, path: context.path, title: context.title },
     ...(input.anchor ? { anchor: input.anchor } : {}),
     ...(input.textEdit ? { textEdit: input.textEdit } : {}),
+    ...(input.flow ? { flow: input.flow } : {}),
     viewport: env.viewport,
     createdAt: env.now.toISOString(),
   };
