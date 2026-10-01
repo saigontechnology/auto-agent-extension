@@ -1,10 +1,13 @@
 import type { Worker } from '@playwright/test';
 import type { browser } from 'wxt/browser';
 import { expect, test } from './fixtures';
+import { WORKFLOW_RECORDING } from '../lib/config';
 import { FIXTURE, openReview } from './helpers';
 
 // `worker.evaluate` callbacks run inside the extension's service worker, where `chrome` exists.
 declare const chrome: typeof browser;
+
+test.skip(!WORKFLOW_RECORDING, 'Recording workflows is turned off while WORKFLOW_RECORDING is false');
 
 type StoredStep = Record<string, unknown> & { type: string };
 

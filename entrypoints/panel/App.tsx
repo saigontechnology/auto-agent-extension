@@ -7,7 +7,7 @@ import { MAX_STEPS } from '@/lib/flow/steps';
 import { feedbackPayload } from '@/lib/api/feedback-payload';
 import { sendToBackground } from '@/lib/background-client';
 import { clientInfo } from '@/lib/client-info';
-import { LOCAL_ONLY } from '@/lib/config';
+import { LOCAL_ONLY, WORKFLOW_RECORDING } from '@/lib/config';
 import { removeDraft, updateDraft } from '@/lib/draft-store';
 import { setFeedbackStatus } from '@/lib/feedback-store';
 import type { FlowRequest } from '@/lib/messages';
@@ -331,9 +331,11 @@ export function App() {
                 <button type="button" onClick={() => setPageComment('')}>
                   Add page comment
                 </button>
-                <button type="button" onClick={startRecording}>
-                  Record workflow
-                </button>
+                {WORKFLOW_RECORDING && (
+                  <button type="button" onClick={startRecording}>
+                    Record workflow
+                  </button>
+                )}
               </div>
             </div>
 
@@ -380,8 +382,8 @@ export function App() {
             </div>
             {drafts.length === 0 && (
               <p className="empty">
-                No drafts yet. Choose Select or Text above, then click something on the page, or record a
-                workflow.
+                No drafts yet. Choose Select or Text above, then click something on the page
+                {WORKFLOW_RECORDING ? ', or record a workflow.' : '.'}
               </p>
             )}
             <ul>

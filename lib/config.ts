@@ -15,3 +15,9 @@ export const REQUIRE_PREVIEW_MARKERS: boolean = false;
  * and sign-in, and the background ignores any saved API settings.
  */
 export const LOCAL_ONLY: boolean = true;
+
+/**
+ * When false, the review panel hides the Record workflow button, so no new workflow can be
+ * recorded. Existing workflow drafts and sent workflows are still listed.
+ */
+export const WORKFLOW_RECORDING: boolean = false;

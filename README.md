@@ -32,6 +32,8 @@ The extension currently runs in a testing mode set in `lib/config.ts`:
   below uses its host as the project and `local` as the build.
 - `LOCAL_ONLY = true`: feedback is stored in this browser only. There is no sign-in, and the
   API settings are hidden.
+- `WORKFLOW_RECORDING = false`: the **Record workflow** button is hidden, so step 4 below is
+  not available for now. Set it to `true` to turn workflow recording back on.
 
 ## Look and feel
 
