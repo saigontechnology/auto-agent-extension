@@ -1,9 +1,11 @@
 # Auto Agent
 
 A Chrome extension for leaving feedback on preview builds deployed by the vibe-coding tool.
-Open a preview, pick an element, pin a comment, and send the batch to the tool.
+Open a demo deployed by Auto Agent, pick an element, pin a comment, and send the batch as an Update
+Feedback run.
 
 Design: `docs/superpowers/specs/2026-09-30-vibe-feedback-extension-design.md`
+Auto Agent integration: `docs/superpowers/specs/2026-10-01-auto-agent-integration-design.md`
 
 ## Requirements
 
@@ -18,22 +20,22 @@ Design: `docs/superpowers/specs/2026-09-30-vibe-feedback-extension-design.md`
 | `pnpm dev` | Run the extension in a development browser with hot reload |
 | `pnpm test` | Unit tests |
 | `pnpm compile` | Type-check |
-| `pnpm test:e2e` | Build, then run the Playwright tests against the built extension; they serve their own pages from `e2e/pages` on port 4173 |
+| `pnpm test:e2e` | Builds with `--mode e2e` (into `.output/chrome-mv3-e2e`, talking to a fake Auto Agent API) and runs the Playwright tests; `e2e/serve.mjs` serves the pages and the fake API on port 4173, which must be free |
 | `pnpm build` | Production build in `.output/chrome-mv3` |
 
 To install a build by hand: open `chrome://extensions`, enable Developer mode, choose
 "Load unpacked" and select `.output/chrome-mv3`.
 
-## Testing mode
+## Switches
 
-The extension currently runs in a testing mode set in `lib/config.ts`:
+`lib/config.ts` holds build-time switches:
 
 - `REQUIRE_PREVIEW_MARKERS = false`: it works on any web page. A page without the meta tags
   below uses its host as the project and `local` as the build.
-- `LOCAL_ONLY = true`: feedback is stored in this browser only. There is no sign-in, and the
-  API settings are hidden.
-- `WORKFLOW_RECORDING = false`: the **Record workflow** button is hidden, so step 4 below is
+- `WORKFLOW_RECORDING = false`: the **Record workflow** button is hidden, so step 5 below is
   not available for now. Set it to `true` to turn workflow recording back on.
+- `API_BASE`: Auto Agent's API, `https://vibe.saigontechnology.vn/api/v1`. A build can point
+  elsewhere with `WXT_API_BASE`, as `.env.e2e` does for the end-to-end tests.
 
 ## Look and feel
 
@@ -44,15 +46,19 @@ defined at the top of `entrypoints/panel/style.css` and `entrypoints/content/sty
 
 ## Using it
 
-1. Open a preview build and click the extension icon. The review panel opens as a window
+1. Click **Sign in with Microsoft** in the panel. Your Saigon Technology account must be a
+   user in Auto Agent. The panel then looks for the demo deployed at the page's address; if
+   none of your demos matches, choose the project and demo yourself. **Change** picks another.
+2. Open a preview build and click the extension icon. The review panel opens as a window
    floating over the page, so the page keeps its full width. Drag its title bar to move it,
    fold it down to a small bar with the chevron, and click the icon again to close it.
-2. Choose **Select** and click an element to comment on it, or **Text** and click a piece of
+3. Choose **Select** and click an element to comment on it, or **Text** and click a piece of
    text to rewrite it in place. **Add page comment** records feedback about the whole page.
-3. Review the drafts in the panel, untick any you want to hold back, then press **Send**.
-   Only ticked drafts are sent; the others stay as drafts. Sent feedback can be resolved and
-   reopened; **Export JSON** saves the ticked drafts as the body the feedback API will receive.
-4. To report a problem that takes several steps, press **Record workflow** and use the page
+4. Review the drafts in the panel, untick any you want to hold back, then press **Send**.
+   Only ticked drafts are sent, as one Update Feedback run on the demo; the others stay as
+   drafts. The panel shows each run's status and links to it in Auto Agent. Sent feedback can
+   be resolved and reopened; **Export JSON** saves the ticked drafts as the file Send uploads.
+5. To report a problem that takes several steps, press **Record workflow** and use the page
    as usual. Clicks, typing (values are recorded as typed, so use test data), choices, page
    changes, console errors and failed requests are listed live in the panel. **Note** adds a
    remark at that point, **Pause** stops listening, and leaving the preview pauses recording
@@ -74,14 +80,14 @@ defined at the top of `entrypoints/panel/style.css` and `entrypoints/content/sty
 With `REQUIRE_PREVIEW_MARKERS` on, a page without both meta tags is treated as "not a preview
 build". With it off, the host and `local` stand in for the missing values.
 
-## Connecting the real API
+## Auto Agent
 
-First set `LOCAL_ONLY` to `false` in `lib/config.ts`. The extension then starts in mock mode:
-feedback is still stored in the browser until mock is turned off in Options.
-
-- `lib/api/http-feedback-api.ts` is the only file that knows the API's URLs and payload.
-  Change it when the real contract differs from the proposal in the design spec.
-- Turn mock off on the Options page and fill in the API base URL and the OAuth settings.
-  The page shows the redirect URI to register with the tool.
-- The redirect URI contains the extension id, which the `key` in `wxt.config.ts` pins to
-  `halobcdjpokedneejfmdjecjgdkejjdk` on every machine.
+- Sign-in uses Auto Agent's browser-extension flow, so the extension id must be in the
+  server's `BROWSER_EXTENSION_IDS`. The `key` in `wxt.config.ts` pins the id to
+  `halobcdjpokedneejfmdjecjgdkejjdk` on every machine; do not change it.
+- `lib/api/auto-agent-client.ts` is the only file that knows Auto Agent's URLs and response
+  shapes.
+- Auto Agent's download page asks the installed extension for its version through
+  `externally_connectable`; the background answers `{ type: "ping" }`.
+- To publish a release: bump `version` in `package.json`, run `pnpm zip`, and upload the zip
+  in Auto Agent under **System Settings → Browser Extension**.

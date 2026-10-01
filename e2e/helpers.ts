@@ -9,6 +9,17 @@ export const FIXTURE = 'http://localhost:4173/';
 /** The same fixture server under a host that is not in any allow-list. */
 export const OTHER_HOST = 'http://127.0.0.1:4173/';
 
+/** The fake Auto Agent API served by e2e/serve.mjs. */
+export const FAKE_API = 'http://localhost:4173/fake-auto-agent/api/v1';
+
+/** What the fake Auto Agent has received so far. */
+export async function fakeApiState(): Promise<{
+  runs: Array<{ id: string; demoJobId: string; status: string; feedbackDescription: string; feedbackFiles: string[] }>;
+  uploads: Array<{ id: string; name: string; body: string }>;
+}> {
+  return (await (await fetch(`${FAKE_API}/_state`)).json()).data;
+}
+
 /** Opens a test page plus the review panel, as its own page, bound to that page's tab. */
 export async function openReview(
   context: BrowserContext,

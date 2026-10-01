@@ -76,26 +76,4 @@ test('any page can be reviewed, without preview markers and on any host', async 
     comment: 'Works without markers',
     page: { path: '/plain.html' },
   });
-
-  await panel.getByRole('button', { name: 'Send 1' }).click();
-  await expect(
-    panel.getByRole('region', { name: 'Sent' }).getByText('Works without markers'),
-  ).toBeVisible();
-});
-
-test('the panel offers no API settings or sign-in while feedback is local only', async ({
-  context,
-  worker,
-  extensionId,
-}) => {
-  const { panel } = await openReview(context, worker, extensionId);
-  await expectConnected(panel);
-  await expect(panel.getByRole('button', { name: 'Options' })).toHaveCount(0);
-  await expect(panel.getByRole('button', { name: 'Sign in' })).toHaveCount(0);
-  await expect(panel.getByText('Mock', { exact: true })).toHaveCount(0);
-
-  const options = await context.newPage();
-  await options.goto(`chrome-extension://${extensionId}/options.html`);
-  await expect(options.getByText('API settings are turned off in this build.')).toBeVisible();
-  await expect(options.getByRole('button', { name: 'Save' })).toHaveCount(0);
 });

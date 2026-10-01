@@ -20,7 +20,16 @@ async function setPanel(worker: Worker, tabId: number, open: boolean): Promise<v
   await worker.evaluate(
     async ([id, value]) => {
       await chrome.storage.session.set({ 'open-panels': value ? [id] : [] });
-      await chrome.tabs.sendMessage(id as number, { type: 'set-panel', open: value });
+      // The content script may still be starting right after a navigation; wait until it listens.
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          await chrome.tabs.sendMessage(id as number, { type: 'set-panel', open: value });
+          return;
+        } catch (error) {
+          if (attempt >= 50) throw error;
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+      }
     },
     [tabId, open] as const,
   );

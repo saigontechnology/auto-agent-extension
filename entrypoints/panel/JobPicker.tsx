@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import type { Project } from '@/lib/api/auto-agent-client';
 import type { JobMatch } from '@/lib/api/job-matcher';
 import { sendToBackground } from '@/lib/background-client';
@@ -30,6 +30,9 @@ export function JobPicker({ note, error, onChoose, onCancel }: Props) {
   const [jobs, setJobs] = useState<JobMatch[] | null>(null);
   const [jobId, setJobId] = useState('');
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Labels point at their selects so each select is named by its label alone, not its options.
+  const projectField = useId();
+  const demoField = useId();
 
   useEffect(() => {
     void sendToBackground({ type: 'list-projects' }).then((result) => {
@@ -71,29 +74,35 @@ export function JobPicker({ note, error, onChoose, onCancel }: Props) {
     >
       <p>{note}</p>
       {error && <p className="error">{error}</p>}
-      <label>
-        Project
-        <select value={projectId} disabled={!projects} onChange={(event) => setProjectId(event.target.value)}>
-          <option value="">{projects ? 'Choose a project' : 'Loading…'}</option>
-          {projects?.map((project) => (
-            <option key={project.id} value={project.id}>
-              {project.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Demo
-        <select value={jobId} disabled={!jobs || jobs.length === 0} onChange={(event) => setJobId(event.target.value)}>
-          {!jobs && <option value="">{projectId ? 'Loading…' : 'Choose a project first'}</option>}
-          {jobs?.length === 0 && <option value="">No finished demos in this project</option>}
-          {jobs?.map((candidate) => (
-            <option key={candidate.jobId} value={candidate.jobId}>
-              {jobLabel(candidate)}
-            </option>
-          ))}
-        </select>
-      </label>
+      <label htmlFor={projectField}>Project</label>
+      <select
+        id={projectField}
+        value={projectId}
+        disabled={!projects}
+        onChange={(event) => setProjectId(event.target.value)}
+      >
+        <option value="">{projects ? 'Choose a project' : 'Loading…'}</option>
+        {projects?.map((project) => (
+          <option key={project.id} value={project.id}>
+            {project.name}
+          </option>
+        ))}
+      </select>
+      <label htmlFor={demoField}>Demo</label>
+      <select
+        id={demoField}
+        value={jobId}
+        disabled={!jobs || jobs.length === 0}
+        onChange={(event) => setJobId(event.target.value)}
+      >
+        {!jobs && <option value="">{projectId ? 'Loading…' : 'Choose a project first'}</option>}
+        {jobs?.length === 0 && <option value="">No finished demos in this project</option>}
+        {jobs?.map((candidate) => (
+          <option key={candidate.jobId} value={candidate.jobId}>
+            {jobLabel(candidate)}
+          </option>
+        ))}
+      </select>
       {loadError && <p className="error">{loadError}</p>}
       <div className="row__actions">
         {onCancel && (
