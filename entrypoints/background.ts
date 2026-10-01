@@ -1,20 +1,19 @@
 import { browser, defineBackground, storage } from '#imports';
-import { createHttpFeedbackApi } from '@/lib/api/http-feedback-api';
-import { createMockFeedbackApi } from '@/lib/api/mock-feedback-api';
-import { type OAuthDeps, getAccessToken, isSignedIn, signIn, signOut } from '@/lib/auth/oauth';
+import { createAutoAgentClient } from '@/lib/api/auto-agent-client';
+import { type SessionDeps, getAccessToken, getSession, signIn, signOut } from '@/lib/auth/session';
 import { type HandlerDeps, handleRequest } from '@/lib/background-handlers';
 import { clientInfo } from '@/lib/client-info';
+import { API_BASE } from '@/lib/config';
 import { createFlowHandlers } from '@/lib/flow/flow-handlers';
 import {
   type FlowStatus,
+  type PingReply,
   type SetPanel,
   isBackgroundRequest,
   isFlowContentMessage,
   isPanelState,
+  isPing,
 } from '@/lib/messages';
-import { LOCAL_ONLY } from '@/lib/config';
-import { DEFAULT_SETTINGS, getSettings } from '@/lib/settings-store';
-import type { Settings } from '@/lib/types';
 
 export default defineBackground(() => {
   // The review panel floats over the page instead of docking beside it, so the page keeps its
@@ -78,30 +77,37 @@ export default defineBackground(() => {
     }
   });
 
-  const oauthDeps = (settings: Settings): OAuthDeps => ({
-    settings: settings.oauth,
-    redirectUri: browser.identity.getRedirectURL(),
+  // Sign-in runs here, not in the panel: the Microsoft window takes focus, which would close a
+  // popup and lose the pending result.
+  const sessionDeps: SessionDeps = {
+    apiBase: API_BASE,
+    redirectUri: browser.identity.getRedirectURL('auth'),
     fetch: (input, init) => fetch(input, init),
     now: () => Date.now(),
-    launchWebAuthFlow: (url) => browser.identity.launchWebAuthFlow({ url, interactive: true }),
-  });
+    newState: () => crypto.randomUUID(),
+    launchWebAuthFlow: ({ url, interactive }) =>
+      browser.identity.launchWebAuthFlow({
+        url,
+        interactive,
+        // The silent attempt lets Microsoft redirect on its own when the browser is already
+        // signed in to the company account.
+        abortOnLoadForNonInteractive: false,
+        timeoutMsForNonInteractive: 15_000,
+      }),
+  };
 
   const deps: HandlerDeps = {
-    // While feedback is local only, saved API settings are ignored and the mock API is used.
-    getSettings: LOCAL_ONLY ? async () => DEFAULT_SETTINGS : getSettings,
-    createApi: (settings) =>
-      settings.useMock
-        ? createMockFeedbackApi()
-        : createHttpFeedbackApi({
-            apiBase: settings.apiBase,
-            client: clientInfo(),
-            fetch: (input, init) => fetch(input, init),
-            getAccessToken: (options) => getAccessToken(oauthDeps(settings), options),
-            onUnauthorized: signOut,
-          }),
-    signIn: (settings) => signIn(oauthDeps(settings)),
+    client: createAutoAgentClient({
+      apiBase: API_BASE,
+      fetch: (input, init) => fetch(input, init),
+      getAccessToken: (options) => getAccessToken(sessionDeps, options),
+      onUnauthorized: signOut,
+    }),
+    signIn: () => signIn(sessionDeps),
     signOut,
-    isSignedIn,
+    getSession,
+    clientInfo,
+    now: () => new Date(),
     flow,
   };
 
@@ -124,5 +130,12 @@ export default defineBackground(() => {
     if (!isBackgroundRequest(message)) return;
     handleRequest(message, deps).then(sendResponse);
     return true;
+  });
+
+  // Auto Agent's download page asks which version is installed, to offer an update.
+  browser.runtime.onMessageExternal.addListener((message, _sender, sendResponse) => {
+    if (!isPing(message)) return;
+    const reply: PingReply = { installed: true, version: browser.runtime.getManifest().version };
+    sendResponse(reply);
   });
 });

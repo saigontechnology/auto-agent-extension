@@ -11,6 +11,10 @@ export default defineConfig({
     permissions: ['storage', 'identity', 'scripting'],
     host_permissions: ['http://*/*', 'https://*/*'],
     action: { default_title: 'Auto Agent' },
+    // Auto Agent's download page asks the installed extension for its version.
+    externally_connectable: {
+      matches: ['https://vibe.saigontechnology.vn/*', 'http://localhost:5173/*'],
+    },
     // The review panel is embedded in pages as an iframe.
     web_accessible_resources: [
       // A dynamic URL changes every session, so other pages cannot embed the panel themselves.

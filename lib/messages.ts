@@ -1,3 +1,6 @@
+import type { FeedbackRun, Project } from './api/auto-agent-client';
+import type { JobMatch } from './api/job-matcher';
+import type { User } from './auth/session';
 import type { FlowEdits, RecordingState } from './flow/types';
 import type {
   Anchor,
@@ -78,13 +81,20 @@ export function isFlowStatus(message: unknown): message is FlowStatus {
   return (message as FlowStatus | null)?.type === 'flow-status';
 }
 
-export type AuthState = { useMock: boolean; configured: boolean; signedIn: boolean };
+export type AuthState = { signedIn: boolean; user: User | null };
 
 export type BackgroundRequest =
-  | { type: 'submit'; projectId: string; ids: string[] }
+  /** `projectId` is the drafts' storage key; `url` is the page, which picks the demo job. */
+  | { type: 'submit'; projectId: string; url: string; ids: string[] }
   | { type: 'sign-in' }
   | { type: 'sign-out' }
   | { type: 'auth-state' }
+  | { type: 'resolve-job'; url: string }
+  | { type: 'choose-job'; url: string; match: JobMatch }
+  | { type: 'list-projects' }
+  | { type: 'list-demo-jobs'; project: Project }
+  /** The feedback runs on the demo job the page belongs to. */
+  | { type: 'job-runs'; url: string }
   | { type: 'flow-pause'; tabId: number }
   | { type: 'flow-resume'; tabId: number }
   | { type: 'flow-stop'; tabId: number }
@@ -99,6 +109,11 @@ export type BackgroundResponse = {
   'sign-in': AuthState;
   'sign-out': AuthState;
   'auth-state': AuthState;
+  'resolve-job': JobMatch | null;
+  'choose-job': JobMatch;
+  'list-projects': Project[];
+  'list-demo-jobs': JobMatch[];
+  'job-runs': FeedbackRun[];
   'flow-pause': null;
   'flow-resume': null;
   'flow-stop': null;
@@ -107,7 +122,11 @@ export type BackgroundResponse = {
   'flow-save': FeedbackItem;
 };
 
-export type ErrorCode = 'unauthorized' | 'not-configured' | 'failed';
+/**
+ * `unauthorized`: sign in again. `forbidden`: the page's demo is no longer reachable and has been
+ * forgotten. `not-configured`: no demo has been chosen for the page yet.
+ */
+export type ErrorCode = 'unauthorized' | 'forbidden' | 'not-configured' | 'failed';
 
 export type Result<T> = { ok: true; value: T } | { ok: false; code: ErrorCode; error: string };
 
@@ -116,6 +135,11 @@ const REQUEST_TYPES: ReadonlyArray<BackgroundRequest['type']> = [
   'sign-in',
   'sign-out',
   'auth-state',
+  'resolve-job',
+  'choose-job',
+  'list-projects',
+  'list-demo-jobs',
+  'job-runs',
   'flow-pause',
   'flow-resume',
   'flow-stop',
@@ -127,4 +151,12 @@ const REQUEST_TYPES: ReadonlyArray<BackgroundRequest['type']> = [
 export function isBackgroundRequest(message: unknown): message is BackgroundRequest {
   const type = (message as { type?: unknown } | null)?.type;
   return typeof type === 'string' && (REQUEST_TYPES as readonly string[]).includes(type);
+}
+
+/** Sent by Auto Agent's download page to learn which version is installed. */
+export type Ping = { type: 'ping' };
+export type PingReply = { installed: true; version: string };
+
+export function isPing(message: unknown): message is Ping {
+  return (message as Ping | null)?.type === 'ping';
 }

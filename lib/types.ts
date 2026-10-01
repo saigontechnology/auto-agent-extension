@@ -65,9 +65,21 @@ export type Flow = {
   steps: FlowStep[];
 };
 
+/** The Auto Agent feedback run an item went out in. */
+export type SentRun = {
+  /** The run's own job id. */
+  jobId: string;
+  /** The demo job the run updates. */
+  demoJobId: string;
+  sentAt: string;
+  requiresApproval: boolean;
+};
+
 export type SentFeedback = FeedbackItem & {
   author: { id: string; name: string };
   status: 'open' | 'resolved';
+  /** Absent on items sent before the extension was connected to Auto Agent. */
+  run?: SentRun;
 };
 
 export type ClientInfo = { extensionVersion: string; userAgent: string };

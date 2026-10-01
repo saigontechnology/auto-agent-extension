@@ -1,34 +1,63 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
-import { ApiError, type FeedbackApi, UnauthorizedError } from './api/feedback-api';
-import { createMockFeedbackApi } from './api/mock-feedback-api';
+import type { AutoAgentClient } from './api/auto-agent-client';
+import { ApiError, UnauthorizedError } from './api/errors';
+import type { JobMatch } from './api/job-matcher';
+import { cachedJob, chooseJob } from './api/job-resolver';
 import { type HandlerDeps, handleRequest } from './background-handlers';
 import { addDraft, listDrafts } from './draft-store';
-import { createFlowHandlers } from './flow/flow-handlers';
 import { listFeedback } from './feedback-store';
-import { isBackgroundRequest } from './messages';
-import { DEFAULT_SETTINGS } from './settings-store';
-import { makeFlowItem, makeItem } from './test-helpers';
-import type { FeedbackItem, Settings } from './types';
+import { createFlowHandlers } from './flow/flow-handlers';
+import { isBackgroundRequest, isPing } from './messages';
+import { makeFlowItem, makeItem, makeSession } from './test-helpers';
 
-const real: Settings = {
-  useMock: false,
-  apiBase: 'https://api.example.com',
-  oauth: {
-    authorizeUrl: 'https://auth.example.com/authorize',
-    tokenUrl: 'https://auth.example.com/token',
-    clientId: 'ext',
-    scopes: '',
-  },
+const PAGE = 'https://shop.web.app/home';
+const MATCH: JobMatch = {
+  projectId: 'p1',
+  projectName: 'Shop',
+  jobId: 'job-1',
+  jobName: 'Frontend Demo #job-1',
+  serviceType: 'FRONTEND_DEMO',
+  completedAt: '2026-09-30T00:00:00.000Z',
 };
+
+function makeClient(overrides: Partial<AutoAgentClient> = {}): AutoAgentClient {
+  return {
+    listProjects: vi.fn(async () => ({ items: [], total: 0 })),
+    listJobs: vi.fn(async () => ({ items: [], total: 0 })),
+    getJob: vi.fn(async (id: string) => ({
+      id,
+      serviceType: 'FRONTEND_DEMO',
+      status: 'SUCCESS',
+      jobName: 'Demo',
+      completedAt: null,
+      deploymentUrl: 'https://shop.web.app',
+      feedbackHistory: [
+        {
+          id: 'run-0',
+          status: 'SUCCESS',
+          createdAt: '2026-09-30T00:00:00Z',
+          completedAt: null,
+          feedbackDescription: null,
+          feedbackFiles: [],
+          createdBy: 'bob',
+        },
+      ],
+    })),
+    uploadFeedbackFile: vi.fn(async () => 'file-1'),
+    createFeedbackRun: vi.fn(async () => ({ id: 'run-1', status: 'PENDING', requiresApproval: false })),
+    ...overrides,
+  };
+}
 
 function makeDeps(overrides: Partial<HandlerDeps> = {}): HandlerDeps {
   return {
-    getSettings: async () => DEFAULT_SETTINGS,
-    createApi: () => createMockFeedbackApi(),
-    signIn: vi.fn(async () => undefined),
+    client: makeClient(),
+    signIn: vi.fn(async () => makeSession()),
     signOut: vi.fn(async () => undefined),
-    isSignedIn: vi.fn(async () => false),
+    getSession: vi.fn(async () => makeSession()),
+    clientInfo: () => ({ extensionVersion: '0.1.0', userAgent: 'test' }),
+    now: () => new Date('2026-10-01T04:27:46.111Z'),
     flow: createFlowHandlers({
       now: () => new Date('2026-10-01T00:00:00.000Z'),
       newId: () => crypto.randomUUID(),
@@ -38,12 +67,8 @@ function makeDeps(overrides: Partial<HandlerDeps> = {}): HandlerDeps {
   };
 }
 
-function failingApi(error: Error): FeedbackApi {
-  return {
-    submit: async () => {
-      throw error;
-    },
-  };
+function submit(ids: string[]) {
+  return { type: 'submit' as const, projectId: 'p1', url: PAGE, ids };
 }
 
 describe('handleRequest', () => {
@@ -58,200 +83,163 @@ describe('handleRequest', () => {
     );
     expect(result).toEqual({ ok: false, code: 'failed', error: 'This recording no longer exists.' });
     expect(isBackgroundRequest({ type: 'flow-note', tabId: 1, text: 'x', path: '/' })).toBe(true);
+    expect(isBackgroundRequest({ type: 'resolve-job', url: PAGE })).toBe(true);
   });
 
-  it('submits every draft of the project and clears them', async () => {
-    await addDraft('p1', makeItem({ id: 'a' }));
-    await addDraft('p1', makeItem({ id: 'b' }));
-    await addDraft('p2', makeItem({ id: 'other' }));
-
-    const result = await handleRequest(
-      { type: 'submit', projectId: 'p1', ids: ['a', 'b'] },
-      makeDeps(),
-    );
-
-    expect(result).toMatchObject({ ok: true, value: [{ id: 'a' }, { id: 'b' }] });
-    expect(await listDrafts('p1')).toEqual([]);
-    expect((await listDrafts('p2')).map((d) => d.id)).toEqual(['other']);
+  it('recognises the download page’s ping and nothing else', () => {
+    expect(isPing({ type: 'ping' })).toBe(true);
+    expect(isPing({ type: 'sign-in' })).toBe(false);
+    expect(isPing(null)).toBe(false);
   });
 
-  it('sends only the chosen drafts and keeps the others', async () => {
-    await addDraft('p1', makeItem({ id: 'a' }));
-    await addDraft('p1', makeItem({ id: 'b' }));
-    await addDraft('p1', makeItem({ id: 'c' }));
-    const api: FeedbackApi = {
-      submit: vi.fn(async (_projectId: string, items: FeedbackItem[]) =>
-        items.map((item) => ({ ...item, author: { id: 'u', name: 'U' }, status: 'open' as const })),
-      ),
-    };
-
-    const result = await handleRequest(
-      { type: 'submit', projectId: 'p1', ids: ['a', 'c', 'gone'] },
-      makeDeps({ createApi: () => api }),
-    );
-
-    expect(result).toMatchObject({ ok: true, value: [{ id: 'a' }, { id: 'c' }] });
-    expect(vi.mocked(api.submit).mock.calls[0]![1].map((item: { id: string }) => item.id)).toEqual(['a', 'c']);
-    expect((await listDrafts('p1')).map((d) => d.id)).toEqual(['b']);
-    expect((await listFeedback('p1')).map((item) => item.id)).toEqual(['a', 'c']);
-  });
-
-  it('does not call the API when nothing is chosen', async () => {
-    await addDraft('p1', makeItem({ id: 'a' }));
-    const api = { submit: vi.fn() };
-    const result = await handleRequest(
-      { type: 'submit', projectId: 'p1', ids: [] },
-      makeDeps({ createApi: () => api }),
-    );
-    expect(result).toEqual({ ok: true, value: [] });
-    expect(api.submit).not.toHaveBeenCalled();
-    expect(await listDrafts('p1')).toHaveLength(1);
-  });
-
-  it('does not call the API when there is nothing to send', async () => {
-    const api = { submit: vi.fn() };
-    const result = await handleRequest(
-      { type: 'submit', projectId: 'p1', ids: ['a'] },
-      makeDeps({ createApi: () => api }),
-    );
-    expect(result).toEqual({ ok: true, value: [] });
-    expect(api.submit).not.toHaveBeenCalled();
-  });
-
-  it('keeps the drafts when the submit fails', async () => {
-    await addDraft('p1', makeItem({ id: 'a' }));
-    const result = await handleRequest(
-      { type: 'submit', projectId: 'p1', ids: ['a'] },
-      makeDeps({ createApi: () => failingApi(new ApiError('Request failed (500)', 500)) }),
-    );
-    expect(result).toEqual({ ok: false, code: 'failed', error: 'Request failed (500)' });
-    expect((await listDrafts('p1')).map((d) => d.id)).toEqual(['a']);
-  });
-
-  it('keeps a draft that was added while the submit was in flight', async () => {
-    await addDraft('p1', makeItem({ id: 'a' }));
-    const api: FeedbackApi = {
-      submit: async (_projectId, items) => {
-        await addDraft('p1', makeItem({ id: 'late' }));
-        return items.map((item) => ({ ...item, author: { id: 'u', name: 'U' }, status: 'open' }));
-      },
-    };
-    await handleRequest({ type: 'submit', projectId: 'p1', ids: ['a'] }, makeDeps({ createApi: () => api }));
-    expect((await listDrafts('p1')).map((d) => d.id)).toEqual(['late']);
-  });
-
-  it('keeps what was sent in the local feedback store as open', async () => {
-    await addDraft('p1', makeItem({ id: 'a' }));
-    await handleRequest({ type: 'submit', projectId: 'p1', ids: ['a'] }, makeDeps());
-    expect(await listFeedback('p1')).toMatchObject([{ id: 'a', status: 'open' }]);
-  });
-
-  it('stores nothing when the submit fails', async () => {
-    await addDraft('p1', makeItem({ id: 'a' }));
-    await handleRequest(
-      { type: 'submit', projectId: 'p1', ids: ['a'] },
-      makeDeps({ createApi: () => failingApi(new ApiError('Request failed (500)', 500)) }),
-    );
-    expect(await listFeedback('p1')).toEqual([]);
-  });
-
-  it('reports unauthorized distinctly', async () => {
-    await addDraft('p1', makeItem({ id: 'a' }));
-    const result = await handleRequest(
-      { type: 'submit', projectId: 'p1', ids: ['a'] },
-      makeDeps({ createApi: () => failingApi(new UnauthorizedError()) }),
-    );
-    expect(result).toEqual({ ok: false, code: 'unauthorized', error: 'Sign in to continue' });
-  });
-
-  it('refuses API calls when the real API is not configured', async () => {
-    const createApi = vi.fn();
-    const result = await handleRequest(
-      { type: 'submit', projectId: 'p1', ids: ['a'] },
-      makeDeps({ getSettings: async () => ({ ...DEFAULT_SETTINGS, useMock: false }), createApi }),
-    );
-    expect(result).toMatchObject({ ok: false, code: 'not-configured' });
-    expect(createApi).not.toHaveBeenCalled();
-  });
-
-  it('reports the auth state in mock mode as signed in', async () => {
-    const result = await handleRequest({ type: 'auth-state' }, makeDeps());
-    expect(result).toEqual({
+  it('reports who is signed in', async () => {
+    expect(await handleRequest({ type: 'auth-state' }, makeDeps())).toEqual({
       ok: true,
-      value: { useMock: true, configured: true, signedIn: true },
+      value: { signedIn: true, user: makeSession().user },
+    });
+    const signedOut = makeDeps({ getSession: vi.fn(async () => null) });
+    expect(await handleRequest({ type: 'auth-state' }, signedOut)).toEqual({
+      ok: true,
+      value: { signedIn: false, user: null },
     });
   });
 
-  it('reports the auth state for the real API', async () => {
-    const result = await handleRequest(
-      { type: 'auth-state' },
-      makeDeps({ getSettings: async () => real, isSignedIn: async () => false }),
-    );
-    expect(result).toEqual({
-      ok: true,
-      value: { useMock: false, configured: true, signedIn: false },
-    });
-  });
-
-  it('signs in with the saved settings and returns the new state', async () => {
-    let signedIn = false;
+  it('passes a sign-in error through as its message', async () => {
     const deps = makeDeps({
-      getSettings: async () => real,
       signIn: vi.fn(async () => {
-        signedIn = true;
+        throw new Error('Sign-in was cancelled.');
       }),
-      isSignedIn: async () => signedIn,
-    });
-    const result = await handleRequest({ type: 'sign-in' }, deps);
-    expect(deps.signIn).toHaveBeenCalledWith(real);
-    expect(result).toMatchObject({ ok: true, value: { signedIn: true } });
-  });
-
-  it('reports a cancelled sign-in as a failure', async () => {
-    const deps = makeDeps({
-      getSettings: async () => real,
-      signIn: async () => {
-        throw new Error('Sign-in was cancelled');
-      },
     });
     expect(await handleRequest({ type: 'sign-in' }, deps)).toEqual({
       ok: false,
       code: 'failed',
-      error: 'Sign-in was cancelled',
+      error: 'Sign-in was cancelled.',
     });
   });
 
-  it('signs out', async () => {
-    const deps = makeDeps({ getSettings: async () => real });
-    const result = await handleRequest({ type: 'sign-out' }, deps);
-    expect(deps.signOut).toHaveBeenCalled();
-    expect(result).toMatchObject({ ok: true, value: { signedIn: false } });
+  it('refuses to send before a demo is chosen for the page', async () => {
+    await addDraft('p1', makeItem({ id: 'a' }));
+    const deps = makeDeps();
+    const result = await handleRequest(submit(['a']), deps);
+    expect(result).toMatchObject({ ok: false, code: 'not-configured' });
+    expect(deps.client.uploadFeedbackFile).not.toHaveBeenCalled();
+    expect(await listDrafts('p1')).toHaveLength(1);
   });
 
-  it('never sends a workflow without a title, even when it is chosen', async () => {
-    await addDraft('p1', makeFlowItem({ id: 'untitled', comment: '' }));
-    await addDraft('p1', makeFlowItem({ id: 'titled' }));
-    const api: FeedbackApi = {
-      submit: vi.fn(async (_projectId: string, items: FeedbackItem[]) =>
-        items.map((item) => ({ ...item, author: { id: 'u', name: 'U' }, status: 'open' as const })),
-      ),
-    };
+  it('uploads the chosen drafts as JSON, starts a run with a Markdown description, and keeps the rest', async () => {
+    await chooseJob(PAGE, MATCH);
+    await addDraft('p1', makeItem({ id: 'a', comment: 'First' }));
+    await addDraft('p1', makeItem({ id: 'b' }));
+    await addDraft('p1', makeFlowItem({ id: 'c' }));
+    const deps = makeDeps();
 
-    await handleRequest(
-      { type: 'submit', projectId: 'p1', ids: ['untitled', 'titled'] },
-      makeDeps({ createApi: () => api }),
-    );
+    const result = await handleRequest(submit(['a', 'c', 'gone']), deps);
 
-    expect(vi.mocked(api.submit).mock.calls[0]![1].map((item: FeedbackItem) => item.id)).toEqual(['titled']);
-    expect((await listDrafts('p1')).map((d) => d.id)).toEqual(['untitled']);
+    expect(result).toMatchObject({ ok: true, value: [{ id: 'a' }, { id: 'c' }] });
+    const upload = vi.mocked(deps.client.uploadFeedbackFile);
+    const create = vi.mocked(deps.client.createFeedbackRun);
+    const file = upload.mock.calls[0]![0];
+    expect(file.name).toBe('auto-agent-feedback-p1-2026-10-01T04-27-46-111Z.json');
+    expect(file.type).toBe('application/json');
+    expect(JSON.parse(await file.text()).items.map((item: { id: string }) => item.id)).toEqual(['a', 'c']);
+    expect(create).toHaveBeenCalledWith('job-1', {
+      description: expect.stringContaining('# Feedback from the Auto Agent extension'),
+      fileIds: ['file-1'],
+    });
+    expect(create.mock.calls[0]![1].description).toContain('First');
+    expect(upload.mock.invocationCallOrder[0]!).toBeLessThan(create.mock.invocationCallOrder[0]!);
+
+    expect((await listDrafts('p1')).map((draft) => draft.id)).toEqual(['b']);
+    const sent = await listFeedback('p1');
+    expect(sent.map((item) => item.id)).toEqual(['a', 'c']);
+    expect(sent[0]).toMatchObject({
+      status: 'open',
+      author: { id: 'u1', name: 'Ada Lovelace' },
+      run: { jobId: 'run-1', demoJobId: 'job-1', sentAt: '2026-10-01T04:27:46.111Z', requiresApproval: false },
+    });
   });
-});
 
-describe('isBackgroundRequest', () => {
-  it('accepts known request types only', () => {
-    expect(isBackgroundRequest({ type: 'submit', projectId: 'p', ids: [] })).toBe(true);
-    expect(isBackgroundRequest({ type: 'content-ready' })).toBe(false);
-    expect(isBackgroundRequest(null)).toBe(false);
-    expect(isBackgroundRequest('submit')).toBe(false);
+  it('keeps every draft when the run cannot be created', async () => {
+    await chooseJob(PAGE, MATCH);
+    await addDraft('p1', makeItem({ id: 'a' }));
+    const client = makeClient({
+      createFeedbackRun: vi.fn(async () => {
+        throw new ApiError('Feedback updates require a successfully completed job', 400);
+      }),
+    });
+    const result = await handleRequest(submit(['a']), makeDeps({ client }));
+    expect(result).toEqual({
+      ok: false,
+      code: 'failed',
+      error: 'Feedback updates require a successfully completed job',
+    });
+    expect(await listDrafts('p1')).toHaveLength(1);
+    expect(await listFeedback('p1')).toEqual([]);
+  });
+
+  it('forgets the demo when access to it is lost, so the page can be matched again', async () => {
+    await chooseJob(PAGE, MATCH);
+    await addDraft('p1', makeItem({ id: 'a' }));
+    const client = makeClient({
+      createFeedbackRun: vi.fn(async () => {
+        throw new ApiError('Forbidden', 403);
+      }),
+    });
+    const result = await handleRequest(submit(['a']), makeDeps({ client }));
+    expect(result).toEqual({ ok: false, code: 'forbidden', error: 'You no longer have access to this demo.' });
+    expect(await cachedJob(PAGE)).toBeNull();
+    expect(await listDrafts('p1')).toHaveLength(1);
+  });
+
+  it('reports an ended session as unauthorized', async () => {
+    await chooseJob(PAGE, MATCH);
+    await addDraft('p1', makeItem({ id: 'a' }));
+    const client = makeClient({
+      uploadFeedbackFile: vi.fn(async () => {
+        throw new UnauthorizedError();
+      }),
+    });
+    const result = await handleRequest(submit(['a']), makeDeps({ client }));
+    expect(result).toEqual({ ok: false, code: 'unauthorized', error: 'Your session ended. Sign in again.' });
+  });
+
+  it('sends nothing when no chosen draft is left', async () => {
+    await chooseJob(PAGE, MATCH);
+    await addDraft('p1', makeItem({ id: 'a' }));
+    const deps = makeDeps();
+    expect(await handleRequest(submit([]), deps)).toEqual({ ok: true, value: [] });
+    expect(deps.client.uploadFeedbackFile).not.toHaveBeenCalled();
+  });
+
+  it('reads the runs of the page’s demo, and none before a demo is chosen', async () => {
+    const deps = makeDeps();
+    expect(await handleRequest({ type: 'job-runs', url: PAGE }, deps)).toEqual({ ok: true, value: [] });
+    await chooseJob(PAGE, MATCH);
+    const result = await handleRequest({ type: 'job-runs', url: PAGE }, deps);
+    expect(result).toMatchObject({ ok: true, value: [{ id: 'run-0', createdBy: 'bob' }] });
+    expect(deps.client.getJob).toHaveBeenCalledWith('job-1');
+  });
+
+  it('forgets the demo when its runs can no longer be read', async () => {
+    await chooseJob(PAGE, MATCH);
+    const client = makeClient({
+      getJob: vi.fn(async () => {
+        throw new ApiError('Job not found', 404);
+      }),
+    });
+    const result = await handleRequest({ type: 'job-runs', url: PAGE }, makeDeps({ client }));
+    expect(result).toMatchObject({ ok: false, code: 'forbidden' });
+    expect(await cachedJob(PAGE)).toBeNull();
+  });
+
+  it('remembers a demo the reviewer chose', async () => {
+    expect(await handleRequest({ type: 'choose-job', url: PAGE, match: MATCH }, makeDeps())).toEqual({
+      ok: true,
+      value: MATCH,
+    });
+    expect(await handleRequest({ type: 'resolve-job', url: 'https://shop.web.app/other' }, makeDeps())).toEqual({
+      ok: true,
+      value: MATCH,
+    });
   });
 });
