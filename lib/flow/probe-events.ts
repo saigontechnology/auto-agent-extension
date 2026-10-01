@@ -42,3 +42,18 @@ export function probeAction(event: ProbeEvent): FlowAction | null {
   if (event.url.startsWith('chrome-extension:')) return null;
   return { type: 'network', method: event.method.toUpperCase(), url: event.url, status: event.status, count: 1 };
 }
+
+/**
+ * Extracts a ProbeMessage from a CustomEvent dispatched from the page's main world.
+ * Returns null if the event is not a valid probe message.
+ */
+export function probeMessageFromEvent(event: Event): ProbeMessage | null {
+  const detail = (event as CustomEvent<unknown>).detail;
+  if (typeof detail !== 'string') return null;
+  try {
+    const parsed = JSON.parse(detail);
+    return isProbeMessage(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}

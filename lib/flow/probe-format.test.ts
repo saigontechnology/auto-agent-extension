@@ -33,6 +33,13 @@ describe('formatArgs', () => {
   it('has no stack when no argument is an error', () => {
     expect(formatArgs(['a', 'b'])).toEqual({ message: 'a b' });
   });
+
+  it('slices message to MAX_REPORT', () => {
+    const long = 'x'.repeat(5000);
+    const result = formatArgs([long]);
+    expect(result.message).toBe('x'.repeat(4000));
+    expect(result.message.length).toBe(4000);
+  });
 });
 
 describe('isFailedStatus', () => {

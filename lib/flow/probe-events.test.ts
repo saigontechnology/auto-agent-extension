@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isProbeMessage, probeAction } from './probe-events';
+import { isProbeMessage, probeAction, probeMessageFromEvent } from './probe-events';
 import { PROBE_TAG } from './probe-format';
 import { MAX_MESSAGE } from './steps';
 
@@ -46,5 +46,28 @@ describe('probeAction', () => {
 
   it('ignores requests to extension pages', () => {
     expect(probeAction({ kind: 'network', method: 'GET', url: 'chrome-extension://abc/x', status: 404 })).toBeNull();
+  });
+});
+
+describe('probeMessageFromEvent', () => {
+  it('extracts a probe message from a CustomEvent with valid JSON detail', () => {
+    const message = { tag: PROBE_TAG, event: { kind: 'console', source: 'error', message: 'test' } };
+    const event = new CustomEvent(PROBE_TAG, { detail: JSON.stringify(message) });
+    expect(probeMessageFromEvent(event)).toEqual(message);
+  });
+
+  it('returns null for non-string detail', () => {
+    const event = new CustomEvent(PROBE_TAG, { detail: { tag: PROBE_TAG, event: { kind: 'console', source: 'error', message: 'test' } } });
+    expect(probeMessageFromEvent(event)).toBeNull();
+  });
+
+  it('returns null for invalid JSON detail', () => {
+    const event = new CustomEvent(PROBE_TAG, { detail: 'not valid json {' });
+    expect(probeMessageFromEvent(event)).toBeNull();
+  });
+
+  it('returns null for valid JSON but wrong shape detail', () => {
+    const event = new CustomEvent(PROBE_TAG, { detail: JSON.stringify({ tag: 'wrong', event: {} }) });
+    expect(probeMessageFromEvent(event)).toBeNull();
   });
 });

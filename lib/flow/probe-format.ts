@@ -4,6 +4,7 @@
  */
 
 export const PROBE_TAG = 'vibe-flow-probe';
+export const MAX_REPORT = 4000;
 
 export type ProbeEvent =
   | { kind: 'console'; source: 'error' | 'exception' | 'rejection'; message: string; stack?: string }
@@ -30,9 +31,9 @@ export function formatValue(value: unknown): string {
 }
 
 export function formatArgs(args: unknown[]): { message: string; stack?: string } {
-  const message = args.map(formatValue).join(' ');
+  const message = args.map(formatValue).join(' ').slice(0, MAX_REPORT);
   const error = args.find((arg): arg is Error => arg instanceof Error);
-  return error?.stack ? { message, stack: error.stack } : { message };
+  return error?.stack ? { message, stack: error.stack.slice(0, MAX_REPORT) } : { message };
 }
 
 export function isFailedStatus(status: number): boolean {

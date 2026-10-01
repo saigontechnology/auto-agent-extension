@@ -1,5 +1,6 @@
 import { defineContentScript } from '#imports';
 import {
+  MAX_REPORT,
   PROBE_TAG,
   type ProbeEvent,
   type ProbeMessage,
@@ -13,6 +14,9 @@ import {
  * also sees errors raised while a page loads. Every wrapper calls straight through to the
  * original and never changes what the page gets back. The isolated content script decides
  * whether a report is kept: only while the tab is recording.
+ *
+ * Events are reported via CustomEvent dispatched to the document. A string detail crosses
+ * from the page's world to the extension's isolated world; objects do not.
  */
 export default defineContentScript({
   matches: ['http://*/*', 'https://*/*'],
@@ -23,7 +27,7 @@ export default defineContentScript({
     const report = (event: ProbeEvent) => {
       try {
         const message: ProbeMessage = { tag: PROBE_TAG, event };
-        window.postMessage(message, '*');
+        document.dispatchEvent(new CustomEvent(PROBE_TAG, { detail: JSON.stringify(message) }));
       } catch {
         // Never let reporting break the page.
       }
@@ -42,11 +46,12 @@ export default defineContentScript({
     window.addEventListener('error', (event) => {
       try {
         const error: unknown = event.error;
+        const message = error instanceof Error ? `${error.name}: ${error.message}` : event.message;
         report({
           kind: 'console',
           source: 'exception',
-          message: error instanceof Error ? `${error.name}: ${error.message}` : event.message,
-          ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
+          message: message.slice(0, MAX_REPORT),
+          ...(error instanceof Error && error.stack ? { stack: error.stack.slice(0, MAX_REPORT) } : {}),
         });
       } catch {
         // See above.
@@ -63,8 +68,15 @@ export default defineContentScript({
 
     const originalFetch = window.fetch;
     window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
-      const method = init?.method ?? (input instanceof Request ? input.method : 'GET');
-      const url = input instanceof Request ? input.url : absoluteUrl(input, location.href);
+      let method: string;
+      let url: string;
+      try {
+        method = init?.method ?? (input instanceof Request ? input.method : 'GET');
+        url = input instanceof Request ? input.url : absoluteUrl(input, location.href);
+      } catch {
+        // Metadata computation failed; call through and skip reporting.
+        return originalFetch.call(window, input, init);
+      }
       try {
         const response = await originalFetch.call(window, input, init);
         if (isFailedStatus(response.status)) report({ kind: 'network', method, url, status: response.status });
@@ -75,15 +87,36 @@ export default defineContentScript({
       }
     };
 
+    const xhrMetadata = new WeakMap<XMLHttpRequest, { method: string; url: string }>();
     const originalOpen = XMLHttpRequest.prototype.open;
     XMLHttpRequest.prototype.open = function (this: XMLHttpRequest, ...args: unknown[]) {
-      const method = String(args[0] ?? 'GET');
-      const url = absoluteUrl(args[1] as string | URL, location.href);
-      this.addEventListener('loadend', () => {
-        // Status 0 means the request never got a response: network error, CORS or abort.
-        const status = this.status === 0 ? null : this.status;
-        if (status === null || isFailedStatus(status)) report({ kind: 'network', method, url, status });
-      });
+      let method: string;
+      let url: string;
+      try {
+        method = String(args[0] ?? 'GET');
+        url = absoluteUrl(args[1] as string | URL, location.href);
+      } catch {
+        // Metadata computation failed; call through and skip reporting.
+        return (originalOpen as (...openArgs: unknown[]) => void).apply(this, args);
+      }
+
+      // Update or add metadata for this XHR.
+      const isNew = !xhrMetadata.has(this);
+      xhrMetadata.set(this, { method, url });
+
+      // Add loadend listener only on first open() call.
+      if (isNew) {
+        this.addEventListener('loadend', () => {
+          const metadata = xhrMetadata.get(this);
+          if (!metadata) return;
+          // Status 0 means the request never got a response: network error, CORS or abort.
+          const status = this.status === 0 ? null : this.status;
+          if (status === null || isFailedStatus(status)) {
+            report({ kind: 'network', method: metadata.method, url: metadata.url, status });
+          }
+        });
+      }
+
       return (originalOpen as (...openArgs: unknown[]) => void).apply(this, args);
     } as typeof XMLHttpRequest.prototype.open;
   },
