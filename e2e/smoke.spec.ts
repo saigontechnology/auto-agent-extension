@@ -19,7 +19,7 @@ test('pin a comment, send it, and see it as sent', async ({ context, worker, ext
   await panel.bringToFront();
   const drafts = panel.getByRole('region', { name: 'Drafts' });
   await expect(drafts.getByText('Make this button bigger')).toBeVisible();
-  await expect(drafts.getByRole('link', { name: 'localhost:4173/' })).toBeVisible();
+  await expect(drafts.getByRole('link', { name: 'localhost:4317/' })).toBeVisible();
   await expect(drafts.getByText('src/pages/Home.tsx:10')).toHaveCount(0);
 
   await panel.getByRole('button', { name: 'Send 1' }).click();
@@ -66,7 +66,7 @@ test('any page can be reviewed, without preview markers and on any host', async 
     panel.waitForEvent('download'),
     panel.getByRole('button', { name: 'Export JSON' }).click(),
   ]);
-  expect(download.suggestedFilename()).toMatch(/^auto-agent-feedback-127\.0\.0\.1-4173-.+\.json$/);
+  expect(download.suggestedFilename()).toMatch(/^auto-agent-feedback-127\.0\.0\.1-4317-.+\.json$/);
   const payload = JSON.parse(readFileSync(await download.path(), 'utf8'));
   expect(payload.client.extensionVersion).toBeTruthy();
   expect(payload.items).toHaveLength(1);

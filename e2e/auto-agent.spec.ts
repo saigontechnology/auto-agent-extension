@@ -39,7 +39,7 @@ test('a page on a demo’s site finds the demo, and Send starts one feedback run
   await expect(sent.getByText('Running', { exact: true })).toBeVisible();
   await expect(sent.getByRole('link', { name: 'Open in Auto Agent' })).toHaveAttribute(
     'href',
-    'http://localhost:4173/jobs/run-1',
+    'http://localhost:4317/jobs/run-1',
   );
   await expect(page.locator('[data-vf-pin="sent"]')).toHaveText('1');
 

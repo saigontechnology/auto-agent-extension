@@ -1,4 +1,4 @@
-// Serves the end-to-end test pages in e2e/pages on http://localhost:4173, and a fake Auto Agent
+// Serves the end-to-end test pages in e2e/pages on http://localhost:4317, and a fake Auto Agent
 // API under /fake-auto-agent/api/v1 that the e2e build of the extension talks to.
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -6,7 +6,7 @@ import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('./pages', import.meta.url));
-const port = Number(process.env.PORT ?? 4173);
+const port = Number(process.env.PORT ?? 4317);
 const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript' };
 
 const FAKE = '/fake-auto-agent/api/v1';

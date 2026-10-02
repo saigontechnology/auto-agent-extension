@@ -7,7 +7,7 @@ export default defineConfig({
   reporter: 'list',
   webServer: {
     command: 'node e2e/serve.mjs',
-    url: 'http://localhost:4173/',
+    url: 'http://localhost:4317/',
     reuseExistingServer: true,
   },
 });

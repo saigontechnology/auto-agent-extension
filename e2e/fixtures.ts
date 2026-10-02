@@ -6,7 +6,7 @@ import type { browser } from 'wxt/browser';
 declare const chrome: typeof browser;
 
 const extensionPath = fileURLToPath(new URL('../.output/chrome-mv3-e2e', import.meta.url));
-const FAKE_API = 'http://localhost:4173/fake-auto-agent/api/v1';
+const FAKE_API = 'http://localhost:4317/fake-auto-agent/api/v1';
 
 type Fixtures = { context: BrowserContext; worker: Worker; extensionId: string; signedIn: boolean };
 

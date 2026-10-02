@@ -50,7 +50,7 @@ test('a recording captures entries, clicks, errors and page changes', async ({
   expect(steps[0]).toMatchObject({ value: 'ada@example.com', anchor: { source: 'src/pages/Login.tsx:31' } });
   // Values are recorded verbatim, passwords included.
   expect(steps[1]).toMatchObject({ value: 'hunter2' });
-  expect(steps[5]).toMatchObject({ method: 'POST', status: 500, url: 'http://localhost:4173/api/login' });
+  expect(steps[5]).toMatchObject({ method: 'POST', status: 500, url: 'http://localhost:4317/api/login' });
   expect(steps[7]).toMatchObject({ source: 'error', message: 'About to crash' });
   expect(steps[8]).toMatchObject({ source: 'exception', message: 'Error: Boom' });
   expect(steps[10]).toMatchObject({ cause: 'load', path: '/about.html' });

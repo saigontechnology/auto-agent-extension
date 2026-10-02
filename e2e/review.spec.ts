@@ -85,7 +85,7 @@ test('drafts from another page are listed but not pinned', async ({
   await expect(page).toHaveTitle('About · Demo Shop');
   await expectConnected(panel);
   const drafts = panel.getByRole('region', { name: 'Drafts' });
-  await expect(drafts.getByRole('link', { name: 'localhost:4173/', exact: true })).toBeVisible();
+  await expect(drafts.getByRole('link', { name: 'localhost:4317/', exact: true })).toBeVisible();
   await expect(drafts.getByText('Shorter headline')).toBeVisible();
   await expect(page.locator('[data-vf-pin]')).toHaveCount(0);
 
@@ -113,7 +113,7 @@ test('a page comment has no pin; drafts can be edited and deleted in the panel',
   await panel.getByRole('button', { name: 'Add', exact: true }).click();
 
   const drafts = panel.getByRole('region', { name: 'Drafts' });
-  await expect(drafts.getByRole('link', { name: 'localhost:4173/' })).toBeVisible();
+  await expect(drafts.getByRole('link', { name: 'localhost:4317/' })).toBeVisible();
   await expect(drafts.getByText('Needs a back button')).toBeVisible();
   await expect(page.locator('[data-vf-pin]')).toHaveCount(0);
 
@@ -188,7 +188,7 @@ test('comments made after a route change are filed under the new route', async (
 
   const drafts = panel.getByRole('region', { name: 'Drafts' });
   for (const path of ['/spa.html#/home', '/spa.html#/settings', '/pushed/a']) {
-    await expect(drafts.getByRole('link', { name: `localhost:4173${path}`, exact: true })).toBeVisible();
+    await expect(drafts.getByRole('link', { name: `localhost:4317${path}`, exact: true })).toBeVisible();
   }
   await expect(page.locator('[data-vf-pin="draft"]')).toHaveCount(1);
 

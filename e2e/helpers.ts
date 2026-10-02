@@ -5,12 +5,12 @@ import { expect } from './fixtures';
 // `worker.evaluate` callbacks run inside the extension's service worker, where `chrome` exists.
 declare const chrome: typeof browser;
 
-export const FIXTURE = 'http://localhost:4173/';
+export const FIXTURE = 'http://localhost:4317/';
 /** The same fixture server under a host that is not in any allow-list. */
-export const OTHER_HOST = 'http://127.0.0.1:4173/';
+export const OTHER_HOST = 'http://127.0.0.1:4317/';
 
 /** The fake Auto Agent API served by e2e/serve.mjs. */
-export const FAKE_API = 'http://localhost:4173/fake-auto-agent/api/v1';
+export const FAKE_API = 'http://localhost:4317/fake-auto-agent/api/v1';
 
 /** What the fake Auto Agent has received so far. */
 export async function fakeApiState(): Promise<{

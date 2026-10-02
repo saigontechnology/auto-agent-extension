@@ -20,7 +20,7 @@ Auto Agent integration: `docs/superpowers/specs/2026-10-01-auto-agent-integratio
 | `pnpm dev` | Run the extension in a development browser with hot reload |
 | `pnpm test` | Unit tests |
 | `pnpm compile` | Type-check |
-| `pnpm test:e2e` | Builds with `--mode e2e` (into `.output/chrome-mv3-e2e`, talking to a fake Auto Agent API) and runs the Playwright tests; `e2e/serve.mjs` serves the pages and the fake API on port 4173, which must be free |
+| `pnpm test:e2e` | Builds with `--mode e2e` (into `.output/chrome-mv3-e2e`, talking to a fake Auto Agent API) and runs the Playwright tests; `e2e/serve.mjs` serves the pages and the fake API on port 4317, which must be free |
 | `pnpm build` | Production build in `.output/chrome-mv3` |
 
 To install a build by hand: open `chrome://extensions`, enable Developer mode, choose
