@@ -25,7 +25,7 @@ const MATCH: JobMatch = {
 function makeClient(overrides: Partial<AutoAgentClient> = {}): AutoAgentClient {
   return {
     listProjects: vi.fn(async () => ({ items: [], total: 0 })),
-    listJobs: vi.fn(async () => ({ items: [], total: 0 })),
+    listProjectJobs: vi.fn(async () => []),
     getJob: vi.fn(async (id: string) => ({
       id,
       serviceType: 'FRONTEND_DEMO',
@@ -127,7 +127,7 @@ describe('handleRequest', () => {
     expect(await listDrafts('p1')).toHaveLength(1);
   });
 
-  it('uploads the chosen drafts as JSON, starts a run with a Markdown description, and keeps the rest', async () => {
+  it('uploads the chosen drafts as JSON, starts a run from that file alone, and keeps the rest', async () => {
     await chooseJob(PAGE, MATCH);
     await addDraft('p1', makeItem({ id: 'a', comment: 'First' }));
     await addDraft('p1', makeItem({ id: 'b' }));
@@ -143,11 +143,7 @@ describe('handleRequest', () => {
     expect(file.name).toBe('auto-agent-feedback-p1-2026-10-01T04-27-46-111Z.json');
     expect(file.type).toBe('application/json');
     expect(JSON.parse(await file.text()).items.map((item: { id: string }) => item.id)).toEqual(['a', 'c']);
-    expect(create).toHaveBeenCalledWith('job-1', {
-      description: expect.stringContaining('# Feedback from the Auto Agent extension'),
-      fileIds: ['file-1'],
-    });
-    expect(create.mock.calls[0]![1].description).toContain('First');
+    expect(create).toHaveBeenCalledWith('job-1', { fileIds: ['file-1'] });
     expect(upload.mock.invocationCallOrder[0]!).toBeLessThan(create.mock.invocationCallOrder[0]!);
 
     expect((await listDrafts('p1')).map((draft) => draft.id)).toEqual(['b']);
@@ -261,10 +257,9 @@ describe('handleRequest', () => {
   it('suggests the demo at the page’s site without choosing it', async () => {
     const client = makeClient({
       listProjects: vi.fn(async () => ({ items: [{ id: 'p1', name: 'Shop' }], total: 1 })),
-      listJobs: vi.fn(async () => ({
-        items: [{ id: 'job-1', serviceType: 'FRONTEND_DEMO', status: 'SUCCESS', jobName: 'Frontend Demo #job-1', completedAt: null }],
-        total: 1,
-      })),
+      listProjectJobs: vi.fn(async () => [
+        { id: 'job-1', serviceType: 'FRONTEND_DEMO', status: 'SUCCESS', jobName: 'Frontend Demo #job-1', completedAt: null },
+      ]),
     });
     const result = await handleRequest({ type: 'suggest-job', url: PAGE }, makeDeps({ client }));
     expect(result).toMatchObject({ ok: true, value: { jobId: 'job-1', deploymentUrl: 'https://shop.web.app' } });

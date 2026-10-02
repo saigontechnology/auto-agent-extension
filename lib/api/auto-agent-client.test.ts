@@ -65,29 +65,28 @@ describe('createAutoAgentClient', () => {
     expect(authorization(init)).toBe('Bearer token-1');
   });
 
-  it('lists only successful jobs of a project', async () => {
+  it('lists a project’s jobs from the project itself', async () => {
     const deps = makeDeps([
-      envelope(
-        [
-          {
-            id: 'j1',
-            serviceType: 'MOBILE_DEMO',
-            status: 'SUCCESS',
-            jobName: 'Mobile Demo #j1',
-            completedAt: null,
-            projectName: 'Shop',
-          },
+      envelope({
+        id: 'p 1',
+        name: 'Shop',
+        jobs: [
+          { id: 'j1', serviceType: 'MOBILE_DEMO', status: 'SUCCESS', jobName: 'Mobile Demo #j1', completedAt: null },
+          { id: 'j2', serviceType: 'FRONTEND_DEMO', status: 'FAILED', jobName: null, parentJobId: null },
         ],
-        { total: 1, page: 2, itemPerPage: 100 },
-      ),
+      }),
     ]);
-    const page = await createAutoAgentClient(deps).listJobs('p 1', 2);
-    expect(page.items).toEqual([
+    const jobs = await createAutoAgentClient(deps).listProjectJobs('p 1');
+    expect(jobs).toEqual([
       { id: 'j1', serviceType: 'MOBILE_DEMO', status: 'SUCCESS', jobName: 'Mobile Demo #j1', completedAt: null },
+      { id: 'j2', serviceType: 'FRONTEND_DEMO', status: 'FAILED', jobName: 'j2', completedAt: null },
     ]);
-    expect(vi.mocked(deps.fetch).mock.calls[0]![0]).toBe(
-      `${BASE}/jobs?projectId=p+1&status=SUCCESS&page=2&itemPerPage=100`,
-    );
+    expect(vi.mocked(deps.fetch).mock.calls[0]![0]).toBe(`${BASE}/projects/p%201`);
+  });
+
+  it('treats a project without jobs as having none', async () => {
+    const jobs = await createAutoAgentClient(makeDeps([envelope({ id: 'p1', name: 'Shop' })])).listProjectJobs('p1');
+    expect(jobs).toEqual([]);
   });
 
   it('reads a job with its deployment URL and feedback history', async () => {
@@ -118,14 +117,11 @@ describe('createAutoAgentClient', () => {
 
   it('creates a feedback run and reads requiresApproval', async () => {
     const deps = makeDeps([envelope({ id: 'run-2', status: 'PENDING', requiresApproval: true })]);
-    const run = await createAutoAgentClient(deps).createFeedbackRun('job-1', {
-      description: 'Fix it',
-      fileIds: ['file-1'],
-    });
+    const run = await createAutoAgentClient(deps).createFeedbackRun('job-1', { fileIds: ['file-1'] });
     expect(run).toEqual({ id: 'run-2', status: 'PENDING', requiresApproval: true });
     const [url, init] = vi.mocked(deps.fetch).mock.calls[0]!;
     expect(url).toBe(`${BASE}/jobs/job-1/feedback`);
-    expect(JSON.parse(init!.body as string)).toEqual({ description: 'Fix it', fileIds: ['file-1'] });
+    expect(JSON.parse(init!.body as string)).toEqual({ fileIds: ['file-1'] });
   });
 
   it('retries once with a refreshed token after a 401', async () => {
@@ -151,7 +147,7 @@ describe('createAutoAgentClient', () => {
   it('shows the server message of an error envelope with its status', async () => {
     const deps = makeDeps([envelope(null, null, 400, 'Feedback updates require a successfully completed job')]);
     await expect(
-      createAutoAgentClient(deps).createFeedbackRun('job-1', { description: 'x', fileIds: [] }),
+      createAutoAgentClient(deps).createFeedbackRun('job-1', { fileIds: [] }),
     ).rejects.toMatchObject({ message: 'Feedback updates require a successfully completed job', status: 400 });
   });
 

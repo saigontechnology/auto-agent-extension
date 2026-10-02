@@ -45,7 +45,7 @@ export function listProjects(client: AutoAgentClient): Promise<Project[]> {
 }
 
 async function demoSummaries(client: AutoAgentClient, project: Project): Promise<DemoSummary[]> {
-  const jobs = await allPages((page) => client.listJobs(project.id, page));
+  const jobs = await client.listProjectJobs(project.id);
   return jobs.filter(isDemoJob).map((job) => ({
     projectId: project.id,
     projectName: project.name,

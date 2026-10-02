@@ -1,5 +1,14 @@
 import { expect, test } from './fixtures';
-import { FAKE_API, OTHER_HOST, expectConnected, fakeApiState, openReview, pinComment, setMode } from './helpers';
+import {
+  FAKE_API,
+  OTHER_HOST,
+  expectConnected,
+  fakeApiState,
+  openReview,
+  pinComment,
+  runUpdate,
+  setMode,
+} from './helpers';
 
 test.describe('signed out', () => {
   test.use({ signedIn: false });
@@ -28,7 +37,7 @@ test.describe('signed out', () => {
 test.describe('no demo chosen yet', () => {
   test.use({ demoChosen: false });
 
-  test('the demo at the page’s site is offered first, and Send starts one feedback run', async ({
+  test('the demo at the page’s site is offered first, and a confirmed Run update starts one feedback run', async ({
     context,
     worker,
     extensionId,
@@ -44,8 +53,18 @@ test.describe('no demo chosen yet', () => {
     await page.bringToFront();
     await pinComment(page, '#buy', 'Make this button bigger');
     await panel.bringToFront();
+    // Nothing starts until the run is confirmed.
+    const runButton = panel.getByRole('button', { name: 'Run update (1 draft)' });
+    const confirm = panel.getByRole('alertdialog', { name: 'Confirm update' });
+    await runButton.click();
+    await expect(confirm.getByText('Frontend Demo #shop')).toBeVisible();
+    await confirm.getByRole('button', { name: 'Cancel' }).click();
+    await expect(confirm).toHaveCount(0);
+    expect((await fakeApiState()).runs).toHaveLength(0);
+
     // A double click must not start two runs.
-    await panel.getByRole('button', { name: 'Send 1 draft' }).dblclick();
+    await runButton.click();
+    await confirm.getByRole('button', { name: 'Run update' }).dblclick();
 
     const sent = panel.getByRole('region', { name: 'Sent' });
     await expect(sent.getByText('Make this button bigger')).toBeVisible();
@@ -59,7 +78,7 @@ test.describe('no demo chosen yet', () => {
     const state = await fakeApiState();
     expect(state.runs).toHaveLength(1);
     expect(state.runs[0]!.demoJobId).toBe('job-shop');
-    expect(state.runs[0]!.feedbackDescription).toContain('Make this button bigger');
+    expect(state.runs[0]!.feedbackDescription).toBeNull();
     expect(state.runs[0]!.feedbackFiles[0]).toMatch(/^auto-agent-feedback-demo-project-.+\.json$/);
     expect(state.uploads[0]!.body).toContain('"comment": "Make this button bigger"');
 
@@ -92,7 +111,7 @@ test.describe('no demo chosen yet', () => {
     await expect(panel.getByText('Other Project · Mobile Demo #other')).toBeVisible();
     await setMode(panel, 'Select');
     await pinComment(page, 'h1', 'Works on any host');
-    await panel.getByRole('button', { name: 'Send 1 draft' }).click();
+    await runUpdate(panel);
     await expect(panel.getByRole('region', { name: 'Sent' }).getByText('Works on any host')).toBeVisible();
     expect((await fakeApiState()).runs[0]!.demoJobId).toBe('job-other');
   });
@@ -116,7 +135,7 @@ test('losing access to the demo says so and asks for another one', async ({ cont
   await page.bringToFront();
   await pinComment(page, '#buy', 'Make this button bigger');
   await panel.bringToFront();
-  await panel.getByRole('button', { name: 'Send 1 draft' }).click();
+  await runUpdate(panel);
   await expect(panel.getByRole('region', { name: 'Sent' }).getByText('Running', { exact: true })).toBeVisible();
 
   // The next status poll finds the project gone.

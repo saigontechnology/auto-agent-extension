@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from './fixtures';
-import { OTHER_HOST, expectConnected, expectTextChange, openReview, pinComment } from './helpers';
+import { OTHER_HOST, expectConnected, expectTextChange, openReview, pinComment, runUpdate } from './helpers';
 
 test('pin a comment, send it, and see it as sent', async ({ context, worker, extensionId }) => {
   const { page, panel } = await openReview(context, worker, extensionId);
@@ -22,7 +22,7 @@ test('pin a comment, send it, and see it as sent', async ({ context, worker, ext
   await expect(drafts.getByRole('link', { name: 'localhost:4317/' })).toBeVisible();
   await expect(drafts.getByText('src/pages/Home.tsx:10')).toHaveCount(0);
 
-  await panel.getByRole('button', { name: 'Send 1' }).click();
+  await runUpdate(panel);
   await expect(panel.getByRole('heading', { name: 'Drafts (0)' })).toBeVisible();
   await expect(panel.getByRole('region', { name: 'Sent' }).getByText('Make this button bigger')).toBeVisible();
   await expect(page.locator('[data-vf-pin="sent"]')).toHaveText('1');

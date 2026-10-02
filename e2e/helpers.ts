@@ -14,7 +14,7 @@ export const FAKE_API = 'http://localhost:4317/fake-auto-agent/api/v1';
 
 /** What the fake Auto Agent has received so far. */
 export async function fakeApiState(): Promise<{
-  runs: Array<{ id: string; demoJobId: string; status: string; feedbackDescription: string; feedbackFiles: string[] }>;
+  runs: Array<{ id: string; demoJobId: string; status: string; feedbackDescription: string | null; feedbackFiles: string[] }>;
   uploads: Array<{ id: string; name: string; body: string }>;
 }> {
   return (await (await fetch(`${FAKE_API}/_state`)).json()).data;
@@ -72,6 +72,12 @@ export async function expectTextChange(scope: Locator, before: string, after: st
 
 export async function setMode(panel: Page, mode: 'Off' | 'Select' | 'Text'): Promise<void> {
   await panel.getByRole('button', { name: mode, exact: true }).click();
+}
+
+/** Presses Run update with one draft ticked, then confirms the run. */
+export async function runUpdate(panel: Page): Promise<void> {
+  await panel.getByRole('button', { name: 'Run update (1 draft)' }).click();
+  await panel.getByRole('alertdialog', { name: 'Confirm update' }).getByRole('button', { name: 'Run update' }).click();
 }
 
 /** Picks an element in Select mode and saves a comment on it. */

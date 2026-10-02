@@ -2,7 +2,7 @@ import type { Worker } from '@playwright/test';
 import type { browser } from 'wxt/browser';
 import { expect, test } from './fixtures';
 import { WORKFLOW_RECORDING } from '../lib/config';
-import { FIXTURE, openReview } from './helpers';
+import { FIXTURE, openReview, runUpdate } from './helpers';
 
 // `worker.evaluate` callbacks run inside the extension's service worker, where `chrome` exists.
 declare const chrome: typeof browser;
@@ -148,7 +148,7 @@ test('a stopped recording is reviewed, saved as a draft and sent', async ({ cont
   await expect(drafts.getByText('2 steps · 1 error')).toBeVisible();
   expect(await storedRecording(worker)).toBeNull();
 
-  await panel.getByRole('button', { name: 'Send 1 draft' }).click();
+  await runUpdate(panel);
   await expect(panel.getByRole('region', { name: 'Sent' }).getByText('Sign-in fails')).toBeVisible();
   const sent = await worker.evaluate(async () => {
     const { feedback } = await chrome.storage.local.get('feedback');
@@ -186,14 +186,14 @@ test('discarding asks first; closing the tab keeps an untitled draft that cannot
   await expect(drafts.getByText('Untitled workflow')).toBeVisible();
   await expect(drafts.getByText('Add a title to send')).toBeVisible();
   await expect(drafts.getByRole('checkbox', { name: 'Include in send' })).toBeDisabled();
-  await expect(second.panel.getByRole('button', { name: 'Send drafts' })).toBeDisabled();
+  await expect(second.panel.getByRole('button', { name: 'Run update', exact: true })).toBeDisabled();
 
   await drafts.getByRole('button', { name: 'Edit' }).click();
   const edit = second.panel.getByRole('form', { name: 'Review workflow' });
   await edit.getByLabel('Title').fill('Email field loses focus');
   await edit.getByRole('button', { name: 'Save draft' }).click();
   await expect(drafts.getByText('Email field loses focus')).toBeVisible();
-  await expect(second.panel.getByRole('button', { name: 'Send 1 draft' })).toBeEnabled();
+  await expect(second.panel.getByRole('button', { name: 'Run update (1 draft)' })).toBeEnabled();
 });
 
 test('steps highlight their element; a sent workflow lists its steps with Go to', async ({
@@ -219,7 +219,7 @@ test('steps highlight their element; a sent workflow lists its steps with Go to'
 
   await review.getByLabel('Title').fill('Round trip');
   await review.getByRole('button', { name: 'Save draft' }).click();
-  await panel.getByRole('button', { name: 'Send 1 draft' }).click();
+  await runUpdate(panel);
 
   const sent = panel.getByRole('region', { name: 'Sent' });
   await sent.getByRole('button', { name: 'Show steps' }).click();
@@ -278,7 +278,7 @@ test('Go to opens the page of a step on another page and highlights its element'
   const review = panel.getByRole('form', { name: 'Review workflow' });
   await review.getByLabel('Title').fill('Cross page');
   await review.getByRole('button', { name: 'Save draft' }).click();
-  await panel.getByRole('button', { name: 'Send 1 draft' }).click();
+  await runUpdate(panel);
 
   const sent = panel.getByRole('region', { name: 'Sent' });
   await sent.getByRole('button', { name: 'Show steps' }).click();
@@ -314,7 +314,7 @@ test('a step whose element is gone from the page is marked as not found', async 
   const review = panel.getByRole('form', { name: 'Review workflow' });
   await review.getByLabel('Title').fill('Vanishing field');
   await review.getByRole('button', { name: 'Save draft' }).click();
-  await panel.getByRole('button', { name: 'Send 1 draft' }).click();
+  await runUpdate(panel);
 
   const sent = panel.getByRole('region', { name: 'Sent' });
   await sent.getByRole('button', { name: 'Show steps' }).click();

@@ -152,6 +152,8 @@ export function App() {
   const [pageComment, setPageComment] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  // A run starts on Auto Agent right away and redeploys the demo, so it is confirmed first.
+  const [confirming, setConfirming] = useState(false);
   // Two clicks in one frame both see `sending` false; the ref stops the second from starting a run.
   const sendingRef = useRef(false);
 
@@ -357,10 +359,9 @@ export function App() {
     send({ type: 'start-recording' });
   };
 
-  const sendLabel =
-    chosen.length === 0
-      ? 'Send drafts'
-      : `Send ${chosen.length} ${chosen.length === 1 ? 'draft' : 'drafts'}`;
+  const draftCount = `${chosen.length} ${chosen.length === 1 ? 'draft' : 'drafts'}`;
+  const sendLabel = chosen.length === 0 ? 'Run update' : `Run update (${draftCount})`;
+  const canSubmit = canSend && !sending && chosen.length > 0;
 
   return (
     <div className="panel">
@@ -505,20 +506,46 @@ export function App() {
             </button>
           </p>
         )}
-        {!canSend && <p className="muted">Choose the demo this page belongs to before sending.</p>}
-        <div className="footer__buttons">
-          <button type="button" disabled={chosen.length === 0} onClick={exportDrafts}>
-            Export JSON
-          </button>
-          <button
-            type="button"
-            className="primary footer__send"
-            disabled={!canSend || sending || chosen.length === 0}
-            onClick={() => void submit()}
-          >
-            {sending ? 'Sending…' : sendLabel}
-          </button>
-        </div>
+        {!canSend && <p className="muted">Choose the demo this page belongs to before running an update.</p>}
+        {confirming && match ? (
+          <div className="footer__confirm" role="alertdialog" aria-label="Confirm update">
+            <p>
+              Run an update of <strong>{match.jobName}</strong> with {draftCount}? Auto Agent starts it right away
+              and redeploys the demo.
+            </p>
+            <div className="footer__buttons">
+              <button type="button" onClick={() => setConfirming(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primary footer__send"
+                autoFocus
+                disabled={!canSubmit}
+                onClick={() => {
+                  setConfirming(false);
+                  void submit();
+                }}
+              >
+                Run update
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="footer__buttons">
+            <button type="button" disabled={chosen.length === 0} onClick={exportDrafts}>
+              Export JSON
+            </button>
+            <button
+              type="button"
+              className="primary footer__send"
+              disabled={!canSubmit}
+              onClick={() => setConfirming(true)}
+            >
+              {sending ? 'Starting update…' : sendLabel}
+            </button>
+          </div>
+        )}
       </footer>
     </div>
   );

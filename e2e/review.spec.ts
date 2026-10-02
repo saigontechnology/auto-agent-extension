@@ -7,6 +7,7 @@ import {
   openPanelOnBlankTab,
   openReview,
   pinComment,
+  runUpdate,
   setMode,
 } from './helpers';
 
@@ -263,7 +264,7 @@ test('sent feedback can be resolved and reopened, and stays after a reload', asy
   const { page, panel } = await openReview(context, worker, extensionId);
   await setMode(panel, 'Select');
   await pinComment(page, '#title', 'Shorter headline');
-  await panel.getByRole('button', { name: 'Send 1' }).click();
+  await runUpdate(panel);
 
   const sent = panel.getByRole('region', { name: 'Sent' });
   await expect(page.locator('[data-vf-pin="sent"]')).toHaveCount(1);
@@ -328,7 +329,7 @@ test('only the ticked drafts are sent; the rest stay as drafts', async ({
   await expect(all).not.toBeChecked();
   expect(await all.evaluate((box: HTMLInputElement) => box.indeterminate)).toBe(true);
 
-  await panel.getByRole('button', { name: 'Send 1 draft' }).click();
+  await runUpdate(panel);
   const sent = panel.getByRole('region', { name: 'Sent' });
   await expect(sent.getByText('Bigger button')).toBeVisible();
   await expect(sent.getByText('Shorter headline')).toHaveCount(0);
@@ -337,6 +338,6 @@ test('only the ticked drafts are sent; the rest stay as drafts', async ({
 
   // Nothing ticked: nothing to send or export.
   await all.uncheck();
-  await expect(panel.getByRole('button', { name: 'Send drafts' })).toBeDisabled();
+  await expect(panel.getByRole('button', { name: 'Run update', exact: true })).toBeDisabled();
   await expect(panel.getByRole('button', { name: 'Export JSON' })).toBeDisabled();
 });

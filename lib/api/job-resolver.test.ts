@@ -42,10 +42,9 @@ function makeClient(): AutoAgentClient {
     listProjects: vi.fn(async (page: number) =>
       page === 1 ? { items: [{ id: 'p1', name: 'Shop' }], total: 2 } : { items: [{ id: 'p2', name: 'App' }], total: 2 },
     ),
-    listJobs: vi.fn(async (projectId: string) => {
-      const items = (JOBS[projectId] ?? []).map(({ deploymentUrl: _url, ...summary }) => summary);
-      return { items, total: items.length };
-    }),
+    listProjectJobs: vi.fn(async (projectId: string) =>
+      (JOBS[projectId] ?? []).map(({ deploymentUrl: _url, ...summary }) => summary),
+    ),
     getJob: vi.fn(async (id: string): Promise<JobDetail> => {
       const job = Object.values(JOBS)
         .flat()

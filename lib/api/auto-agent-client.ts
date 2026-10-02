@@ -29,13 +29,16 @@ export type ListPage<T> = { items: T[]; total: number };
 
 export type AutoAgentClient = {
   listProjects(page: number): Promise<ListPage<Project>>;
-  /** Only successful jobs: the only ones that can take feedback. */
-  listJobs(projectId: string, page: number): Promise<ListPage<JobSummary>>;
+  /**
+   * Every job of a project, whatever its status or who started it. `GET /jobs` is only the
+   * caller's own jobs, so a project's are read from the project, as the web app does.
+   */
+  listProjectJobs(projectId: string): Promise<JobSummary[]>;
   getJob(id: string): Promise<JobDetail>;
   /** Uploads one feedback file and returns its id. */
   uploadFeedbackFile(file: File): Promise<string>;
-  /** Starts an Update Feedback run on a successful demo job. It starts right away. */
-  createFeedbackRun(demoJobId: string, body: { description: string; fileIds: string[] }): Promise<CreatedRun>;
+  /** Starts an Update Feedback run on a successful demo job from uploaded files. It starts right away. */
+  createFeedbackRun(demoJobId: string, body: { fileIds: string[] }): Promise<CreatedRun>;
 };
 
 export type ClientDeps = {
@@ -161,9 +164,10 @@ export function createAutoAgentClient(deps: ClientDeps): AutoAgentClient {
       return listPage(await request(`/projects?${query({ page, itemPerPage: PAGE_SIZE })}`), project);
     },
 
-    async listJobs(projectId, page) {
-      const path = `/jobs?${query({ projectId, status: 'SUCCESS', page, itemPerPage: PAGE_SIZE })}`;
-      return listPage(await request(path), jobSummary);
+    async listProjectJobs(projectId) {
+      const { data } = await request(`/projects/${encodeURIComponent(projectId)}`);
+      if (!isRecord(data)) throw unexpected();
+      return Array.isArray(data.jobs) ? data.jobs.map(jobSummary) : [];
     },
 
     async getJob(id) {

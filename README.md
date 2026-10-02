@@ -55,10 +55,11 @@ defined at the top of `entrypoints/panel/style.css` and `entrypoints/content/sty
    fold it down to a small bar with the chevron, and click the icon again to close it.
 3. Choose **Select** and click an element to comment on it, or **Text** and click a piece of
    text to rewrite it in place. **Add page comment** records feedback about the whole page.
-4. Review the drafts in the panel, untick any you want to hold back, then press **Send**.
-   Only ticked drafts are sent, as one Update Feedback run on the demo; the others stay as
-   drafts. The panel shows each run's status and links to it in Auto Agent. Sent feedback can
-   be resolved and reopened; **Export JSON** saves the ticked drafts as the file Send uploads.
+4. Review the drafts in the panel, untick any you want to hold back, then press **Run update**
+   and confirm. Only ticked drafts are sent, as one Update Feedback run on the demo; the others
+   stay as drafts. The panel shows each run's status and links to it in Auto Agent. Sent
+   feedback can be resolved and reopened; **Export JSON** saves the ticked drafts as the file
+   Run update uploads.
 5. To report a problem that takes several steps, press **Record workflow** and use the page
    as usual. Clicks, typing (values are recorded as typed, so use test data), choices, page
    changes, console errors and failed requests are listed live in the panel. **Note** adds a

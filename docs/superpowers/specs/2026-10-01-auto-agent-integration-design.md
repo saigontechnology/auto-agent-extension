@@ -74,7 +74,7 @@ Sign-out removes the stored session. The server keeps no session to revoke.
 | Call | Used for | Shape read by the extension |
 |---|---|---|
 | `GET /projects?page=&itemPerPage=100` | Matching and the picker | `data: Array<{ id, name, stage }>`, `pagination.total` |
-| `GET /jobs?projectId=&status=SUCCESS&page=&itemPerPage=100` | Matching and the picker | `data: Array<{ id, serviceType, status, jobName, projectName, completedAt }>`. The list has **no** `deploymentUrl` |
+| `GET /projects/:id` | Matching and the picker | `data: { id, name, jobs: Array<{ id, serviceType, status, jobName, completedAt, parentJobId }> }`, every job of the project. The list has **no** `deploymentUrl`. (`GET /jobs` lists only the caller's own jobs and is not used.) |
 | `GET /jobs/:id` | `deploymentUrl` of a candidate, and status of runs | `data: { id, serviceType, status, jobName, deploymentUrl, project: { id, name }, feedbackHistory }` |
 | `POST /files/upload?serviceType=DEMO_FEEDBACK` | The JSON payload file | `multipart/form-data`, field `files`; `data: Array<{ id }>` |
 | `POST /jobs/:id/feedback` | Starting a run | Body `{ description, fileIds }`; `data: { id, status, requiresApproval? }` |
@@ -118,7 +118,6 @@ Facts observed on the live API that the design depends on:
 | `lib/api/auto-agent-client.ts` | The only code that knows URLs and the envelope: `listProjects`, `listJobs`, `getJob`, `uploadFeedbackFile`, `createFeedbackRun`. Adds the bearer token, retries once after a 401 with a forced refresh, signs out after a second 401, turns an error envelope into `ApiError(message, status)`, and checks the fields it returns | `session`, `fetch` |
 | `lib/api/job-matcher.ts` | Pure functions: `normalizeOrigin(url)` (lower-case origin, `.firebaseapp.com` → `.web.app`), `isDemoJob(job)`, `pickMatch(origin, candidates)` (newest `completedAt` wins) | — |
 | `lib/api/job-resolver.ts` | `resolveJob(origin)`: cache in `local:job-matches` (`origin → JobMatch`), then a scan on a miss; `chooseJob(origin, match)`; `forgetJob(origin)`. The scan pages through projects, lists each project's successful jobs, keeps demo jobs, and fetches their details with at most 4 requests in flight. Detail fetches already made are cached in `local:job-urls` (`jobId → deploymentUrl`) so a later scan only fetches new jobs | client, matcher |
-| `lib/api/feedback-markdown.ts` | `feedbackMarkdown(items, page)`: one section per draft (kind, page path, element tag/text, `source` or `nearestSource`, comment, text edit before → after, workflow title/expected/actual/steps). Over 10,000 characters it truncates at a section boundary and ends with "Truncated: the attached JSON file has all N items" | `flow/step-label` |
 | `lib/background-handlers.ts` | Handles the requests in 4.2 | the units above, stores |
 | `lib/feedback-store.ts` | Unchanged API. `SentFeedback` gains an optional `run: { jobId, demoJobId, sentAt, requiresApproval }` so the panel can group items by run; items sent before this change have none | — |
 | `entrypoints/background.ts` | Wires dependencies, adds the external `ping` listener | — |
@@ -167,7 +166,7 @@ A new error code, `forbidden`, is returned for 403/404 on a job, next to `unauth
 
 1. Look up the cached match for the origin. None → `not-configured`.
 2. Build the payload with `feedbackPayload(drafts, clientInfo())` and upload it as `auto-agent-feedback-<host>-<timestamp>.json`.
-3. `POST /jobs/:demoJobId/feedback` with `description: feedbackMarkdown(drafts)` and the returned file id.
+3. `POST /jobs/:demoJobId/feedback` with only the returned file id. There is no `description`: the file already holds every draft, and Auto Agent accepts a run with files alone.
 4. Save the drafts as `SentFeedback` with `author: { id: user.id, name: user.displayName }`, `status: 'open'` and `run: { jobId: <run id>, demoJobId, sentAt, requiresApproval }`.
 5. Remove the sent drafts.
 
@@ -209,7 +208,6 @@ Tokens are stored only in `chrome.storage.local`, sent only to the `API_BASE` ho
 - `auto-agent-client`: unwraps the envelope; retries once on 401; signs out on a second 401; maps error envelopes and network failures; rejects malformed data.
 - `job-matcher`: origin normalisation and the `firebaseapp.com` alias; demo types and `SUCCESS` only; newest wins.
 - `job-resolver`: cache hit makes no request; scan with pagination; detail cache avoids refetching; at most 4 detail requests in flight; `forgetJob`.
-- `feedback-markdown`: each kind; source vs nearest source; truncation at 10,000 characters with the note.
 - `background-handlers`: submit uploads, creates the run, saves and removes in that order; any failure keeps the drafts; no match gives `not-configured`; 403 forgets the match.
 
 **End to end (Playwright).**

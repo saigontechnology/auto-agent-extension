@@ -87,7 +87,7 @@ const summary = ({ id, serviceType, status, jobName, completedAt }) => ({
   status,
   jobName,
   completedAt,
-  projectName: 'Demo Shop',
+  parentJobId: null,
 });
 
 async function fakeApi(request, response, url) {
@@ -130,12 +130,13 @@ async function fakeApi(request, response, url) {
     const projects = PROJECTS.filter((project) => visible(project.id));
     return reply(response, 200, projects, { total: projects.length, page: 1, itemPerPage: 100 });
   }
-  if (path === '/jobs') {
-    const status = url.searchParams.get('status');
-    const items = JOBS.filter(
-      (job) => job.projectId === url.searchParams.get('projectId') && (!status || job.status === status),
-    ).map(summary);
-    return reply(response, 200, items, { total: items.length, page: 1, itemPerPage: 100 });
+  // Like Auto Agent, a project's jobs come with the project; `GET /jobs` is only the caller's own.
+  const projectPath = /^\/projects\/([^/]+)$/.exec(path);
+  if (projectPath) {
+    const found = PROJECTS.find((project) => project.id === projectPath[1]);
+    if (!found) return fail(response, 404, 'Project not found');
+    if (!visible(found.id)) return fail(response, 403, 'You are not a member of this project');
+    return reply(response, 200, { ...found, jobs: JOBS.filter((job) => job.projectId === found.id).map(summary) });
   }
   if (path === '/files/upload' && request.method === 'POST') {
     const body = await readBody(request);

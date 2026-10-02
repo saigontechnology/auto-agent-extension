@@ -1,6 +1,5 @@
 import type { AutoAgentClient } from './api/auto-agent-client';
 import { ApiError, UnauthorizedError } from './api/errors';
-import { feedbackMarkdown } from './api/feedback-markdown';
 import { feedbackFileName, feedbackPayload } from './api/feedback-payload';
 import { cachedJob, chooseJob, forgetJob, listDemoJobs, listProjects, suggestJob } from './api/job-resolver';
 import type { Session } from './auth/session';
@@ -76,12 +75,8 @@ async function submit(
   });
   // An upload is not a call on the demo job: its refusal is shown as is and keeps the match.
   const fileId = await deps.client.uploadFeedbackFile(file);
-  const run = await onDemoJob(request.url, () =>
-    deps.client.createFeedbackRun(match.jobId, {
-      description: feedbackMarkdown(drafts, fileName),
-      fileIds: [fileId],
-    }),
-  );
+  // The file holds every draft, so the run has no description to repeat them.
+  const run = await onDemoJob(request.url, () => deps.client.createFeedbackRun(match.jobId, { fileIds: [fileId] }));
 
   const sent = drafts.map(
     (draft): SentFeedback => ({
