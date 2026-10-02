@@ -2,7 +2,7 @@ import type { AutoAgentClient } from './api/auto-agent-client';
 import { ApiError, UnauthorizedError } from './api/errors';
 import { feedbackMarkdown } from './api/feedback-markdown';
 import { feedbackFileName, feedbackPayload } from './api/feedback-payload';
-import { cachedJob, chooseJob, forgetJob, listDemoJobs, listProjects, resolveJob } from './api/job-resolver';
+import { cachedJob, chooseJob, forgetJob, listDemoJobs, listProjects, suggestJob } from './api/job-resolver';
 import type { Session } from './auth/session';
 import { listDrafts, removeDrafts } from './draft-store';
 import { saveFeedback } from './feedback-store';
@@ -119,8 +119,11 @@ async function dispatch(request: BackgroundRequest, deps: HandlerDeps): Promise<
       await deps.signOut();
       return authState(deps);
 
-    case 'resolve-job':
-      return resolveJob(deps.client, request.url);
+    case 'current-job':
+      return cachedJob(request.url);
+
+    case 'suggest-job':
+      return suggestJob(deps.client, request.url);
 
     case 'choose-job':
       return chooseJob(request.url, request.match);

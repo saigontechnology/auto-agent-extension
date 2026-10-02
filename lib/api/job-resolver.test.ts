@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import type { AutoAgentClient, JobDetail, JobSummary } from './auto-agent-client';
-import { cachedJob, chooseJob, forgetJob, listDemoJobs, mapLimit, resolveJob } from './job-resolver';
+import { cachedJob, chooseJob, forgetJob, listDemoJobs, mapLimit, suggestJob } from './job-resolver';
 
 type FakeJob = JobSummary & { deploymentUrl: string | null };
 
@@ -62,16 +62,19 @@ describe('job resolver', () => {
     fakeBrowser.reset();
   });
 
-  it('lists a project’s finished demos, newest first, without feedback runs', async () => {
+  it('lists a project’s finished demos with their sites, newest first, without feedback runs', async () => {
     const jobs = await listDemoJobs(makeClient(), { id: 'p2', name: 'App' });
-    expect(jobs.map((job) => job.jobId)).toEqual(['app', 'nourl']);
+    expect(jobs.map((job) => [job.jobId, job.deploymentUrl])).toEqual([
+      ['app', 'https://app.web.app'],
+      ['nourl', null],
+    ]);
     expect(jobs[0]).toMatchObject({ projectId: 'p2', projectName: 'App', jobName: 'App demo', serviceType: 'MOBILE_DEMO' });
   });
 
-  it('scans every page of projects, matches by origin and remembers the answer', async () => {
+  it('suggests the demo deployed at the page’s site, scanning every page of projects', async () => {
     const client = makeClient();
-    const match = await resolveJob(client, 'https://app.firebaseapp.com/home');
-    expect(match).toMatchObject({ jobId: 'app', projectName: 'App' });
+    const suggestion = await suggestJob(client, 'https://app.firebaseapp.com/home');
+    expect(suggestion).toMatchObject({ jobId: 'app', projectName: 'App', deploymentUrl: 'https://app.web.app' });
     expect(client.listProjects).toHaveBeenCalledTimes(2);
     // Feedback runs share the demo's URL but are never asked for.
     expect(
@@ -80,29 +83,29 @@ describe('job resolver', () => {
         .mock.calls.map(([id]) => id)
         .sort(),
     ).toEqual(['app', 'nourl', 'shop']);
-    expect(await cachedJob('https://app.web.app/other')).toEqual(match);
+  });
 
-    vi.mocked(client.listProjects).mockClear();
-    expect(await resolveJob(client, 'https://app.web.app/')).toEqual(match);
-    expect(client.listProjects).not.toHaveBeenCalled();
+  it('only suggests: the reviewer still has to choose the demo', async () => {
+    await suggestJob(makeClient(), 'https://app.web.app');
+    expect(await cachedJob('https://app.web.app')).toBeNull();
   });
 
   it('does not fetch the same job twice across scans', async () => {
     const client = makeClient();
-    expect(await resolveJob(client, 'https://unknown.web.app')).toBeNull();
+    expect(await suggestJob(client, 'https://unknown.web.app')).toBeNull();
     vi.mocked(client.getJob).mockClear();
-    expect(await resolveJob(client, 'https://still-unknown.web.app')).toBeNull();
+    expect(await suggestJob(client, 'https://still-unknown.web.app')).toBeNull();
     expect(client.getJob).not.toHaveBeenCalled();
   });
 
-  it('still matches when one job’s detail cannot be read', async () => {
+  it('still suggests when one job’s detail cannot be read', async () => {
     const client = makeClient();
     const getJob = client.getJob;
     client.getJob = vi.fn(async (id: string) => {
       if (id === 'shop') throw new Error('Auto Agent sent an unexpected response.');
       return getJob(id);
     });
-    expect(await resolveJob(client, 'https://app.web.app')).toMatchObject({ jobId: 'app' });
+    expect(await suggestJob(client, 'https://app.web.app')).toMatchObject({ jobId: 'app' });
   });
 
   it('keeps a chosen demo for the origin until it is forgotten', async () => {
@@ -113,6 +116,7 @@ describe('job resolver', () => {
       jobName: 'Shop demo',
       serviceType: 'FRONTEND_DEMO',
       completedAt: null,
+      deploymentUrl: 'https://shop.web.app',
     };
     await chooseJob('http://127.0.0.1:4173/plain.html', chosen);
     expect(await cachedJob('http://127.0.0.1:4173/')).toEqual(chosen);

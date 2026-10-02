@@ -89,7 +89,10 @@ export type BackgroundRequest =
   | { type: 'sign-in' }
   | { type: 'sign-out' }
   | { type: 'auth-state' }
-  | { type: 'resolve-job'; url: string }
+  /** The demo the reviewer chose for the page's site. */
+  | { type: 'current-job'; url: string }
+  /** The demo deployed at the page's site, offered first in the list; not chosen by itself. */
+  | { type: 'suggest-job'; url: string }
   | { type: 'choose-job'; url: string; match: JobMatch }
   | { type: 'list-projects' }
   | { type: 'list-demo-jobs'; project: Project }
@@ -109,7 +112,8 @@ export type BackgroundResponse = {
   'sign-in': AuthState;
   'sign-out': AuthState;
   'auth-state': AuthState;
-  'resolve-job': JobMatch | null;
+  'current-job': JobMatch | null;
+  'suggest-job': JobMatch | null;
   'choose-job': JobMatch;
   'list-projects': Project[];
   'list-demo-jobs': JobMatch[];
@@ -135,7 +139,8 @@ const REQUEST_TYPES: ReadonlyArray<BackgroundRequest['type']> = [
   'sign-in',
   'sign-out',
   'auth-state',
-  'resolve-job',
+  'current-job',
+  'suggest-job',
   'choose-job',
   'list-projects',
   'list-demo-jobs',

@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { type JobMatch, isDemoJob, normalizeOrigin, pickMatch } from './job-matcher';
 
-function match(jobId: string, completedAt: string | null): JobMatch {
-  return { projectId: 'p1', projectName: 'Shop', jobId, jobName: jobId, serviceType: 'FRONTEND_DEMO', completedAt };
+function match(jobId: string, completedAt: string | null, deploymentUrl: string | null): JobMatch {
+  return {
+    projectId: 'p1',
+    projectName: 'Shop',
+    jobId,
+    jobName: jobId,
+    serviceType: 'FRONTEND_DEMO',
+    completedAt,
+    deploymentUrl,
+  };
 }
 
 describe('normalizeOrigin', () => {
@@ -33,27 +41,23 @@ describe('isDemoJob', () => {
 
 describe('pickMatch', () => {
   it('finds the demo deployed at the page origin, whatever the path', () => {
-    const candidates = [
-      { match: match('a', '2026-09-01T00:00:00Z'), deploymentUrl: 'https://other.web.app' },
-      { match: match('b', '2026-09-02T00:00:00Z'), deploymentUrl: 'https://shop.web.app' },
+    const demos = [
+      match('a', '2026-09-01T00:00:00Z', 'https://other.web.app'),
+      match('b', '2026-09-02T00:00:00Z', 'https://shop.web.app'),
     ];
-    expect(pickMatch('https://shop.firebaseapp.com/cart', candidates)?.jobId).toBe('b');
+    expect(pickMatch('https://shop.firebaseapp.com/cart', demos)?.jobId).toBe('b');
   });
 
   it('prefers the newest demo when several share a site', () => {
-    const candidates = [
-      { match: match('old', '2026-09-01T00:00:00Z'), deploymentUrl: 'https://shop.web.app' },
-      { match: match('new', '2026-09-03T00:00:00Z'), deploymentUrl: 'https://shop.web.app/' },
-      { match: match('none', null), deploymentUrl: 'https://shop.web.app' },
+    const demos = [
+      match('old', '2026-09-01T00:00:00Z', 'https://shop.web.app'),
+      match('new', '2026-09-03T00:00:00Z', 'https://shop.web.app/'),
+      match('none', null, 'https://shop.web.app'),
     ];
-    expect(pickMatch('https://shop.web.app', candidates)?.jobId).toBe('new');
+    expect(pickMatch('https://shop.web.app', demos)?.jobId).toBe('new');
   });
 
   it('skips demos without a usable deployment URL', () => {
-    const candidates = [
-      { match: match('a', null), deploymentUrl: null },
-      { match: match('b', null), deploymentUrl: 'garbage' },
-    ];
-    expect(pickMatch('https://shop.web.app', candidates)).toBeNull();
+    expect(pickMatch('https://shop.web.app', [match('a', null, null), match('b', null, 'garbage')])).toBeNull();
   });
 });

@@ -19,6 +19,7 @@ const MATCH: JobMatch = {
   jobName: 'Frontend Demo #job-1',
   serviceType: 'FRONTEND_DEMO',
   completedAt: '2026-09-30T00:00:00.000Z',
+  deploymentUrl: 'https://shop.web.app',
 };
 
 function makeClient(overrides: Partial<AutoAgentClient> = {}): AutoAgentClient {
@@ -83,7 +84,7 @@ describe('handleRequest', () => {
     );
     expect(result).toEqual({ ok: false, code: 'failed', error: 'This recording no longer exists.' });
     expect(isBackgroundRequest({ type: 'flow-note', tabId: 1, text: 'x', path: '/' })).toBe(true);
-    expect(isBackgroundRequest({ type: 'resolve-job', url: PAGE })).toBe(true);
+    expect(isBackgroundRequest({ type: 'suggest-job', url: PAGE })).toBe(true);
   });
 
   it('recognises the download page’s ping and nothing else', () => {
@@ -246,13 +247,27 @@ describe('handleRequest', () => {
   });
 
   it('remembers a demo the reviewer chose', async () => {
+    expect(await handleRequest({ type: 'current-job', url: PAGE }, makeDeps())).toEqual({ ok: true, value: null });
     expect(await handleRequest({ type: 'choose-job', url: PAGE, match: MATCH }, makeDeps())).toEqual({
       ok: true,
       value: MATCH,
     });
-    expect(await handleRequest({ type: 'resolve-job', url: 'https://shop.web.app/other' }, makeDeps())).toEqual({
+    expect(await handleRequest({ type: 'current-job', url: 'https://shop.web.app/other' }, makeDeps())).toEqual({
       ok: true,
       value: MATCH,
     });
+  });
+
+  it('suggests the demo at the page’s site without choosing it', async () => {
+    const client = makeClient({
+      listProjects: vi.fn(async () => ({ items: [{ id: 'p1', name: 'Shop' }], total: 1 })),
+      listJobs: vi.fn(async () => ({
+        items: [{ id: 'job-1', serviceType: 'FRONTEND_DEMO', status: 'SUCCESS', jobName: 'Frontend Demo #job-1', completedAt: null }],
+        total: 1,
+      })),
+    });
+    const result = await handleRequest({ type: 'suggest-job', url: PAGE }, makeDeps({ client }));
+    expect(result).toMatchObject({ ok: true, value: { jobId: 'job-1', deploymentUrl: 'https://shop.web.app' } });
+    expect(await cachedJob(PAGE)).toBeNull();
   });
 });

@@ -9,6 +9,8 @@ const PATHS = {
   reopen: ['M4 4v5h5', 'M4.6 9A8 8 0 1 1 4 13'],
   flag: ['M6 21V4', 'M6 4h12l-3 4.5L18 13H6'],
   goto: ['M4 12h14', 'M13 6l6 6-6 6'],
+  next: ['M9 6l6 6-6 6'],
+  back: ['M15 6l-6 6 6 6'],
   external: ['M14 4h6v6', 'M20 4l-8 8', 'M17 14v6H4V7h6'],
   workflow: ['M5 6h4v4H5z', 'M15 14h4v4h-4z', 'M9 8h3v8h3'],
 } as const;

@@ -47,8 +47,9 @@ defined at the top of `entrypoints/panel/style.css` and `entrypoints/content/sty
 ## Using it
 
 1. Click **Sign in with Microsoft** in the panel. Your Saigon Technology account must be a
-   user in Auto Agent. The panel then looks for the demo deployed at the page's address; if
-   none of your demos matches, choose the project and demo yourself. **Change** picks another.
+   user in Auto Agent. The panel then asks which demo you are reviewing: the demo deployed at
+   the page's address is offered first, or pick a project and then one of its demos. The choice
+   is remembered for the site; **Change** picks another.
 2. Open a preview build and click the extension icon. The review panel opens as a window
    floating over the page, so the page keeps its full width. Drag its title bar to move it,
    fold it down to a small bar with the chevron, and click the icon again to close it.

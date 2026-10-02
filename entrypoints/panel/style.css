@@ -941,23 +941,63 @@ button.danger {
   overflow-wrap: anywhere;
 }
 
-.picker {
+/* Choosing the demo: a project list, then that project's demos. */
+
+.chooser {
   display: grid;
-  gap: 10px;
-  margin-top: 14px;
+  gap: 12px;
+  padding-top: 20px;
+}
+
+.chooser > p {
+  margin: 0;
+}
+
+.chooser__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+.chooser__title + .muted {
+  margin-top: -6px;
+}
+
+.chooser__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  justify-self: start;
+  padding: 2px 8px 2px 2px;
+  color: var(--green-text);
+  border: none;
+}
+
+.chooser__back .icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* The demo at this page's site: the likely answer, so it sits above the list. */
+.chooser__suggestion {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
   padding: 12px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  background: var(--wash);
+  border: 1px solid var(--green);
+  border-radius: 10px;
 }
 
-.picker label {
-  margin-bottom: -6px;
-  font-weight: 500;
+.chooser__suggestion .primary {
+  justify-self: stretch;
 }
 
-.picker select {
-  padding: 6px 8px;
+.chooser__search {
+  width: 100%;
+  padding: 8px 10px;
   font: inherit;
   color: inherit;
   background: var(--bg);
@@ -965,8 +1005,73 @@ button.danger {
   border-radius: 8px;
 }
 
-.picker .error {
-  margin-top: 0;
+.chooser__keep {
+  justify-self: start;
+}
+
+.choices {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.choices li + li {
+  border-top: 1px solid var(--line);
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  width: 100%;
+  padding: 11px 12px;
+  text-align: left;
+  border: none;
+  border-radius: 0;
+}
+
+.choice:hover:not(:disabled) {
+  background: var(--surface);
+}
+
+.choice:focus-visible {
+  outline-offset: -2px;
+}
+
+.choice > .icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-left: auto;
+  color: var(--faint);
+}
+
+.choice__body {
+  display: grid;
+  flex: 1 1 180px;
+  min-width: 0;
+  gap: 1px;
+}
+
+.choice__name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.choice__meta,
+.choice__site {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.choice__site {
+  color: var(--green-text);
 }
 
 /* Sent, grouped by feedback run */

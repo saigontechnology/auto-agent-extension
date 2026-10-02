@@ -16,7 +16,7 @@ import type { FeedbackItem, FlowStep, Mode } from '@/lib/types';
 import { Checkbox } from './Checkbox';
 import { DraftRow } from './DraftRow';
 import { FlowReview } from './FlowReview';
-import { JobPicker } from './JobPicker';
+import { DemoChooser } from './DemoChooser';
 import { RecordingBar } from './RecordingBar';
 import { RunGroup } from './RunGroup';
 import { useGoTo, useRecording } from './flow-hooks';
@@ -67,8 +67,7 @@ export function App() {
   const drafts = useDrafts(context?.projectId);
   const auth = useAuth();
   const sent = useSent(context, send);
-  const signedIn = auth.state?.signedIn === true;
-  const jobs = useJobMatch(context?.url, signedIn);
+  const jobs = useJobMatch(context?.url, auth.state ? auth.state.signedIn : null);
   const match = jobs.state.status === 'matched' ? jobs.state.match : null;
   const runs = useRuns(context?.url, match?.jobId ?? null, sent, jobs.forbid);
   const sentGroups = useMemo(() => groupSent(sent, runs.runs), [sent, runs.runs]);
@@ -255,6 +254,26 @@ export function App() {
     );
   }
 
+  // Right after signing in, and on a site with no chosen demo, the list comes first.
+  if (jobs.state.status === 'choosing') {
+    const { previous, error } = jobs.state;
+    return (
+      <div className="panel">
+        {header}
+        <div className="panel__body">
+          <DemoChooser
+            key={context.url}
+            url={context.url}
+            previous={previous}
+            error={error}
+            onChoose={jobs.choose}
+            onCancel={previous ? jobs.cancel : undefined}
+          />
+        </div>
+      </div>
+    );
+  }
+
   const { projectId } = context;
 
   if (editingFlow) {
@@ -310,8 +329,8 @@ export function App() {
   };
 
   let demo: ReactNode = null;
-  if (jobs.state.status === 'resolving') {
-    demo = <p className="demo muted">Finding this demo in Auto Agent…</p>;
+  if (jobs.state.status === 'loading') {
+    demo = <p className="demo muted">Loading your demo…</p>;
   } else if (jobs.state.status === 'matched') {
     demo = (
       <div className="demo">
@@ -323,19 +342,6 @@ export function App() {
           Change
         </button>
       </div>
-    );
-  } else if (jobs.state.status === 'choosing') {
-    demo = (
-      <JobPicker
-        note={
-          jobs.state.previous
-            ? 'Choose the demo this page belongs to:'
-            : 'This page did not match any of your demos. Choose one:'
-        }
-        error={jobs.state.error}
-        onChoose={jobs.choose}
-        onCancel={jobs.state.previous ? jobs.cancel : undefined}
-      />
     );
   }
 

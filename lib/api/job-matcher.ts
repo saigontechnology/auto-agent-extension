@@ -8,6 +8,8 @@ export type JobMatch = {
   jobName: string;
   serviceType: string;
   completedAt: string | null;
+  /** Where the demo is deployed; null when Auto Agent has not said. */
+  deploymentUrl: string | null;
 };
 
 /** The job types Auto Agent accepts feedback on, once they have succeeded. */
@@ -43,15 +45,11 @@ export function newestFirst(a: JobMatch, b: JobMatch): number {
 }
 
 /** The newest demo deployed at the same site as `url`, or null. */
-export function pickMatch(
-  url: string,
-  candidates: Array<{ match: JobMatch; deploymentUrl: string | null }>,
-): JobMatch | null {
+export function pickMatch(url: string, demos: JobMatch[]): JobMatch | null {
   const wanted = normalizeOrigin(url);
   if (!wanted) return null;
-  const hits = candidates
-    .filter(({ deploymentUrl }) => deploymentUrl !== null && normalizeOrigin(deploymentUrl) === wanted)
-    .map(({ match }) => match)
+  const hits = demos
+    .filter((demo) => demo.deploymentUrl !== null && normalizeOrigin(demo.deploymentUrl) === wanted)
     .sort(newestFirst);
   return hits[0] ?? null;
 }

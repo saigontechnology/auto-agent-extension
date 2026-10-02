@@ -285,9 +285,9 @@ export function useSent(
 
 export type JobState =
   | { status: 'idle' }
-  | { status: 'resolving' }
+  | { status: 'loading' }
   | { status: 'matched'; match: JobMatch }
-  /** The picker is open; `previous` is the demo to go back to on Cancel. */
+  /** The demo list is open; `previous` is the demo to go back to on Cancel. */
   | { status: 'choosing'; previous: JobMatch | null; error: string | null };
 
 export type JobMatching = {
@@ -295,15 +295,21 @@ export type JobMatching = {
   choose: (match: JobMatch) => void;
   change: () => void;
   cancel: () => void;
-  /** The demo can no longer be reached: open the picker with `message` instead of looking again. */
+  /** The demo can no longer be reached: open the list with `message` instead of using it again. */
   forbid: (message: string) => void;
 };
 
-/** Which demo job the page belongs to: found by its site, or chosen by the reviewer. */
-export function useJobMatch(url: string | undefined, enabled: boolean): JobMatching {
+/**
+ * The demo the page's feedback goes to. Right after signing in, and on a site with no chosen
+ * demo, the reviewer picks one from the list; after that the choice is remembered per site.
+ * `signedIn` is null until the panel knows.
+ */
+export function useJobMatch(url: string | undefined, signedIn: boolean | null): JobMatching {
   const [state, setState] = useState<JobState>({ status: 'idle' });
   const urlRef = useRef(url);
   urlRef.current = url;
+  // Set once this panel has shown the signed-out screen, so the next sign-in opens the list.
+  const sawSignedOut = useRef(false);
   // Every page of a demo belongs to the same job, so a route change must not look it up again.
   const origin = useMemo(() => {
     try {
@@ -315,21 +321,24 @@ export function useJobMatch(url: string | undefined, enabled: boolean): JobMatch
 
   useEffect(() => {
     const pageUrl = urlRef.current;
-    if (!enabled || !origin || !pageUrl) {
+    if (signedIn === false) sawSignedOut.current = true;
+    if (!signedIn || !origin || !pageUrl) {
       setState({ status: 'idle' });
       return;
     }
     let active = true;
-    setState({ status: 'resolving' });
-    void sendToBackground({ type: 'resolve-job', url: pageUrl }).then((result) => {
+    setState({ status: 'loading' });
+    void sendToBackground({ type: 'current-job', url: pageUrl }).then((result) => {
       if (!active) return;
-      if (result.ok && result.value) setState({ status: 'matched', match: result.value });
-      else setState({ status: 'choosing', previous: null, error: result.ok ? null : result.error });
+      const current = result.ok ? result.value : null;
+      if (current && !sawSignedOut.current) setState({ status: 'matched', match: current });
+      else setState({ status: 'choosing', previous: current, error: result.ok ? null : result.error });
+      sawSignedOut.current = false;
     });
     return () => {
       active = false;
     };
-  }, [origin, enabled]);
+  }, [origin, signedIn]);
 
   const choose = (match: JobMatch) => {
     const pageUrl = urlRef.current;
@@ -353,7 +362,6 @@ export function useJobMatch(url: string | undefined, enabled: boolean): JobMatch
       setState((current) =>
         current.status === 'choosing' && current.previous ? { status: 'matched', match: current.previous } : current,
       ),
-    // Looking the page up again would usually find the same demo and fail the same way.
     forbid: (message) => setState({ status: 'choosing', previous: null, error: message }),
   };
 }

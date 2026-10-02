@@ -5,7 +5,7 @@ import { type JobMatch, isDemoJob, newestFirst, normalizeOrigin, pickMatch } fro
 /** How many requests a scan sends at once. */
 const CONCURRENCY = 4;
 
-/** The demo each reviewed site belongs to, by normalised origin. */
+/** The demo the reviewer chose for each site, by normalised origin. */
 const matchesItem = storage.defineItem<Record<string, JobMatch>>('local:job-matches', { fallback: {} });
 
 /**
@@ -13,6 +13,8 @@ const matchesItem = storage.defineItem<Record<string, JobMatch>>('local:job-matc
  * scan only asks about jobs it has not seen.
  */
 const urlsItem = storage.defineItem<Record<string, string | null>>('local:job-urls', { fallback: {} });
+
+type DemoSummary = Omit<JobMatch, 'deploymentUrl'>;
 
 /** Runs `task` over `items` with at most `limit` running at once; results keep the input order. */
 export async function mapLimit<T, R>(items: T[], limit: number, task: (item: T) => Promise<R>): Promise<R[]> {
@@ -42,45 +44,47 @@ export function listProjects(client: AutoAgentClient): Promise<Project[]> {
   return allPages((page) => client.listProjects(page));
 }
 
-/** A project's demos that can take feedback, newest first. */
-export async function listDemoJobs(client: AutoAgentClient, project: Project): Promise<JobMatch[]> {
+async function demoSummaries(client: AutoAgentClient, project: Project): Promise<DemoSummary[]> {
   const jobs = await allPages((page) => client.listJobs(project.id, page));
-  return jobs
-    .filter(isDemoJob)
-    .map((job) => ({
-      projectId: project.id,
-      projectName: project.name,
-      jobId: job.id,
-      jobName: job.jobName,
-      serviceType: job.serviceType,
-      completedAt: job.completedAt,
-    }))
-    .sort(newestFirst);
+  return jobs.filter(isDemoJob).map((job) => ({
+    projectId: project.id,
+    projectName: project.name,
+    jobId: job.id,
+    jobName: job.jobName,
+    serviceType: job.serviceType,
+    completedAt: job.completedAt,
+  }));
 }
 
 /**
  * The job list has no deployment URL, so each new job's detail is read once. A job whose detail
- * cannot be read counts as having no URL for this scan and is asked about again next time, so
- * one bad job does not stop the others from matching.
+ * cannot be read counts as having no URL for now and is asked about again next time, so one bad
+ * job does not hide the others.
  */
-async function deploymentUrls(client: AutoAgentClient, jobs: JobMatch[]): Promise<Record<string, string | null>> {
+async function withUrls(client: AutoAgentClient, demos: DemoSummary[]): Promise<JobMatch[]> {
   const known = await urlsItem.getValue();
-  const missing = jobs.filter((job) => !(job.jobId in known));
-  if (missing.length === 0) return known;
-  const fetched = await mapLimit(missing, CONCURRENCY, async (job) => {
+  const missing = demos.filter((demo) => !(demo.jobId in known));
+  const fetched = await mapLimit(missing, CONCURRENCY, async (demo) => {
     try {
-      return (await client.getJob(job.jobId)).deploymentUrl;
+      return (await client.getJob(demo.jobId)).deploymentUrl;
     } catch {
       return undefined;
     }
   });
   const update = Object.fromEntries(
-    missing.flatMap((job, index) => (fetched[index] === undefined ? [] : [[job.jobId, fetched[index]]])),
+    missing.flatMap((demo, index) => (fetched[index] === undefined ? [] : [[demo.jobId, fetched[index]]])),
   );
-  await urlsItem.setValue({ ...(await urlsItem.getValue()), ...update });
-  return { ...known, ...update };
+  if (Object.keys(update).length > 0) await urlsItem.setValue({ ...(await urlsItem.getValue()), ...update });
+  const urls: Record<string, string | null> = { ...known, ...update };
+  return demos.map((demo) => ({ ...demo, deploymentUrl: urls[demo.jobId] ?? null }));
 }
 
+/** A project's demos that can take feedback, newest first, with where each is deployed. */
+export async function listDemoJobs(client: AutoAgentClient, project: Project): Promise<JobMatch[]> {
+  return (await withUrls(client, await demoSummaries(client, project))).sort(newestFirst);
+}
+
+/** The demo the reviewer chose for the page's site, or null. */
 export async function cachedJob(url: string): Promise<JobMatch | null> {
   const origin = normalizeOrigin(url);
   return origin ? ((await matchesItem.getValue())[origin] ?? null) : null;
@@ -101,20 +105,13 @@ export async function forgetJob(url: string): Promise<void> {
 }
 
 /**
- * The demo a page belongs to: the remembered one, or else the newest of the reviewer's demos
- * deployed at the page's site. Null when none is, so the reviewer can choose one.
+ * The newest of the reviewer's demos deployed at the page's site, or null. Only a suggestion:
+ * nothing is sent to it until the reviewer chooses it.
  */
-export async function resolveJob(client: AutoAgentClient, url: string): Promise<JobMatch | null> {
+export async function suggestJob(client: AutoAgentClient, url: string): Promise<JobMatch | null> {
   if (!normalizeOrigin(url)) return null;
-  const cached = await cachedJob(url);
-  if (cached) return cached;
-
   const projects = await listProjects(client);
-  const jobs = (await mapLimit(projects, CONCURRENCY, (project) => listDemoJobs(client, project))).flat();
-  const urls = await deploymentUrls(client, jobs);
-  const match = pickMatch(
-    url,
-    jobs.map((job) => ({ match: job, deploymentUrl: urls[job.jobId] ?? null })),
-  );
-  return match ? chooseJob(url, match) : null;
+  // Every project's jobs are listed first, so all detail requests share one limit.
+  const summaries = (await mapLimit(projects, CONCURRENCY, (project) => demoSummaries(client, project))).flat();
+  return pickMatch(url, await withUrls(client, summaries));
 }
