@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type Browser, browser } from 'wxt/browser';
 import type { FeedbackRun } from '@/lib/api/auto-agent-client';
+import { SESSION_ENDED } from '@/lib/api/errors';
 import type { JobMatch } from '@/lib/api/job-matcher';
 import { watchSession } from '@/lib/auth/session';
 import { sendToBackground } from '@/lib/background-client';
@@ -202,7 +203,7 @@ export function useAuth(): Auth {
 
   const apply = useCallback((next: AuthState) => {
     if (signedIn.current && !next.signedIn && !leaving.current) {
-      setError('Your session ended. Sign in again.');
+      setError(SESSION_ENDED);
     } else if (next.signedIn) {
       setError(null);
     }

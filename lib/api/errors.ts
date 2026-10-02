@@ -8,10 +8,12 @@ export class ApiError extends Error {
   }
 }
 
+export const SESSION_ENDED = 'Your session ended. Sign in again.';
+
 /** The session is gone: the reviewer has to sign in again. */
 export class UnauthorizedError extends ApiError {
   constructor() {
-    super('Your session ended. Sign in again.', 401);
+    super(SESSION_ENDED, 401);
     this.name = 'UnauthorizedError';
   }
 }

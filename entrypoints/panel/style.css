@@ -829,13 +829,82 @@ button.danger {
 
 .signin {
   display: grid;
-  gap: 14px;
-  margin-top: 22px;
+  gap: 18px;
+  padding-top: 24px;
+}
+
+.signin__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+.signin__lead {
+  margin-top: -12px;
+  color: var(--muted);
+}
+
+/* The steps reuse the numbered pins the reviewer is about to place on the page. */
+.signin__steps {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.signin__steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.signin__steps .badge {
+  margin-top: 0;
 }
 
 .signin__button {
-  justify-self: start;
-  padding: 8px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 18px;
+  font-size: 15px;
+}
+
+.signin__logo {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.signin__note {
+  margin-top: -10px;
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.signin__problem {
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.signin__problem--error {
+  border-color: var(--danger);
+}
+
+.signin__problem--error .signin__problem-title {
+  color: var(--danger);
+}
+
+.signin__problem-title {
+  font-weight: 600;
 }
 
 .header__user {

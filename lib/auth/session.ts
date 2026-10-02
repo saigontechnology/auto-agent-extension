@@ -39,7 +39,7 @@ export class SignInError extends Error {
 export const CANCELLED_MESSAGE =
   'Sign-in was cancelled. If the window showed the Auto Agent site, this extension is not allowed yet; ask the Auto Agent team to add its ID.';
 export const STATE_MISMATCH_MESSAGE = 'Sign-in response did not match the request. Try again.';
-const NO_SESSION_MESSAGE = 'Sign-in did not return a session. Try again.';
+export const NO_SESSION_MESSAGE = 'Sign-in did not return a session. Try again.';
 
 /** Auto Agent's access tokens last 15 minutes; used only when a token's `exp` cannot be read. */
 const DEFAULT_LIFETIME_MS = 15 * 60_000;
